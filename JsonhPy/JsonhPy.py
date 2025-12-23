@@ -13,32 +13,41 @@ class JSONHParser:
     
 class JSONHReader:
     RESERVED = set([",", ":", "[", "]", "{", "}", "/", "#", '"', "'", "@"])
+
     def __init__(self, source: str):
         self.source = source
         self.i = 0
         self.n = len(source)
         self.comments: list[str] = []
+
     def _eof(self) -> bool:
         return self.i >= self.n
+
     def _peek(self, k: int = 0) -> str:
         j = self.i + k
         return self.source[j] if j < self.n else ""
+
     def _take(self) -> str:
         c = self._peek()
         self.i += 1
         return c
+
     def _err(self, msg: str) -> JSONHSyntaxError:
         return JSONHSyntaxError(f"{msg} at {self.i}")
+
     def _prev_char(self) -> str:
         return self.source[self.i - 1] if self.i > 0 else ""
+
     def _can_start_line_comment(self) -> bool:
         # Guard to avoid treating http:// or foo//bar as a comment
         return self.i == 0 or self._prev_char().isspace()
+
     def _can_start_block_comment(self) -> bool:
         if self.i == 0:
             return True
         prev = self._prev_char()
         return prev.isspace() or prev in "{[,:"
+
     def _consume_newline(self) -> bool:
         if self._peek() == "\n":
             self.i += 1
@@ -49,6 +58,7 @@ class JSONHReader:
                 self.i += 1
             return True
         return False
+
     def _skip(self) -> bool:
         had_nl = False
         while not self._eof():
@@ -131,6 +141,7 @@ class JSONHReader:
                 continue
             break
         return had_nl
+
     def _read_bare_token(self) -> str:
         buf: list[str] = []
         while not self._eof():
@@ -151,7 +162,8 @@ class JSONHReader:
                 buf.append(self._take())
                 continue
             buf.append(self._take())
-        return "".join(buf).strip()    
+        return "".join(buf).strip()
+ 
     def _read_value(self) -> str:
         self._skip()
         c = self._peek()
@@ -179,6 +191,7 @@ class JSONHReader:
             return JSONHQuotelessDecoder.decode_to_json(tok)
         except Exception as e:
             raise self._err(str(e))
+
     def _read_key_json(self) -> str:
         self._skip()
         c = self._peek()
@@ -197,6 +210,7 @@ class JSONHReader:
         except Exception as e:
             raise self._err(str(e))
         return json.dumps(key, ensure_ascii=False)
+
     def _read_braceless_object(self) -> str:
         pairs: list[str] = []
         while True:
@@ -220,6 +234,7 @@ class JSONHReader:
                 continue
             raise self._err("Expected ',' or newline after braceless pair")
         return "{" + ",".join(pairs) + "}"
+
     def _read_object(self) -> str:
         if self._take() != "{":
             raise self._err("Expected '{'")
@@ -252,6 +267,7 @@ class JSONHReader:
             val_json = self._read_value()
             parts.extend([key_json, ":", val_json])
             first = False
+
     def _read_array(self) -> str:
         if self._take() != "[":
             raise self._err("Expected '['")
@@ -278,6 +294,7 @@ class JSONHReader:
                 continue
             raise self._err("Expected ',', newline, or ']' after array item")
         return "[" + ",".join(items) + "]"
+
     def _read_string(self) -> str:
         quote = self._take()
         if quote not in "\"'":
@@ -300,6 +317,7 @@ class JSONHReader:
                 continue
             buf.append(c)
         raise self._err("Unterminated string")
+
     def _read_verbatim(self) -> str:
         if self._take() != "@":
             raise self._err("Expected '@'")
@@ -309,6 +327,7 @@ class JSONHReader:
             raise self._err("Expected string immediately after '@'")
         raw = self._read_quoteless_raw(is_verbatim=True)
         return json.dumps(raw, ensure_ascii=False)
+
     def _read_multiquote(self) -> str:
         q = self._peek()
         quote_count = 0
@@ -402,6 +421,7 @@ class JSONHReader:
             j += 1
         self.i = end + quote_count
         return json.dumps("".join(decoded), ensure_ascii=False)
+
     def _read_root_json(self) -> str:
         self._skip()
         c = self._peek()
@@ -418,6 +438,7 @@ class JSONHReader:
         if is_obj:
             return self._read_braceless_object()
         return self._read_value()
+
     def _read_quoteless_raw(self, *, is_verbatim: bool) -> str:
         buf: list[str] = []
         while not self._eof():
@@ -441,7 +462,8 @@ class JSONHReader:
                 buf.append(nxt)
                 continue
             buf.append(self._take())
-        return "".join(buf).strip()    
+        return "".join(buf).strip()
+
     def to_json(self) -> str:
         self._skip()
         out = self._read_root_json()
@@ -453,6 +475,7 @@ class JSONHReader:
 class JSONHQuotelessDecoder:
     _HEX = "0123456789abcdefABCDEF"
     _ESCAPABLE_PUNCT = set([",", ":", "[", "]", "{", "}", "#", "@"])
+
     @staticmethod
     def decode(tok: str, *, strip: bool = True) -> str:
         out = []
@@ -528,6 +551,7 @@ class JSONHQuotelessDecoder:
             raise ValueError(f"Invalid escape \\{esc}")
         s = "".join(out)
         return s.strip() if strip else s
+
     @staticmethod
     def decode_to_json(tok: str) -> str:
         # One conservative policy choice: unescaped / is rejected in quoteless tokens (easy to remove if undesired).
@@ -554,6 +578,7 @@ class JSONHNumberParser:
         if s.startswith("-."):
             s = s.replace("-.", "-0.", 1)
         return s
+
     @staticmethod
     def _parse(token: str, decimals: int) -> tuple[Decimal, bool]:
         s = token.strip()
@@ -606,6 +631,7 @@ class JSONHNumberParser:
         if used_fractional_exponent:
             out = JSONHNumberParser._round_decimal_places(out, decimals)
         return out, used_fractional_exponent
+
     @staticmethod
     def _split_exponent(digits: str, base_digits: str) -> tuple[str, str | None]:
         if "e" in base_digits:
@@ -620,6 +646,7 @@ class JSONHNumberParser:
             return digits, None
         i = m.start()
         return digits[:i], digits[i + 1 :]
+
     @staticmethod
     def _contains_any_digit(text: str, base_digits: str) -> bool:
         allowed = set(base_digits)
@@ -627,6 +654,7 @@ class JSONHNumberParser:
             if ch.lower() in allowed:
                 return True
         return False
+
     @staticmethod
     def _parse_fractional_number(digits: str, base: int, base_digits: str, allow_sign: bool = False) -> Decimal:
         s = digits.strip()
@@ -647,6 +675,7 @@ class JSONHNumberParser:
         frac = JSONHNumberParser._parse_whole_number(frac_s, base, base_digits, allow_empty=True)
         combined = Decimal(f"{whole}.{frac}")
         return combined * local_sign
+
     @staticmethod
     def _parse_whole_number(digits: str, base: int, base_digits: str, allow_empty: bool = False) -> int:
         s = digits.strip()
@@ -660,6 +689,7 @@ class JSONHNumberParser:
             if c not in allowed:
                 raise ValueError(f"invalid digit {ch!r} for base {base}")
         return int(s, base)
+
     @staticmethod
     def _pow10(exponent: Decimal, decimals: int) -> tuple[Decimal, bool]:
         if exponent == exponent.to_integral_value():
@@ -671,6 +701,7 @@ class JSONHNumberParser:
             val = (exponent * ln10).exp()
             val = JSONHNumberParser._round_decimal_places(val, decimals)
             return (val, True)
+
     @staticmethod
     def _round_decimal_places(x: Decimal, decimals: int) -> Decimal:
         q = Decimal(1).scaleb(-decimals)
