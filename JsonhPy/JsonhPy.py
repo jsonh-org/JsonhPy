@@ -5,12 +5,6 @@ from decimal import Decimal, localcontext
 class JSONHSyntaxError(ValueError):
     pass
 
-class JSONHParser:
-    @staticmethod
-    def convert(source: str) -> str:
-        r = JSONHReader(source)
-        return r.to_json()
-    
 class JSONHReader:
     RESERVED = set([",", ":", "[", "]", "{", "}", "/", "#", '"', "'", "@"])
 
@@ -19,6 +13,18 @@ class JSONHReader:
         self.i = 0
         self.n = len(source)
         self.comments: list[str] = []
+
+    @staticmethod
+    def to_json_from_string(str: str) -> str:
+        return JSONHReader(str).to_json()
+
+    def to_json(self) -> str:
+        self._skip()
+        out = self._read_root_json()
+        self._skip()
+        if not self._eof():
+            raise self._err("Trailing characters")
+        return out
 
     def _eof(self) -> bool:
         return self.i >= self.n
@@ -463,14 +469,6 @@ class JSONHReader:
                 continue
             buf.append(self._take())
         return "".join(buf).strip()
-
-    def to_json(self) -> str:
-        self._skip()
-        out = self._read_root_json()
-        self._skip()
-        if not self._eof():
-            raise self._err("Trailing characters")
-        return out
 
 class JSONHQuotelessDecoder:
     _HEX = "0123456789abcdefABCDEF"

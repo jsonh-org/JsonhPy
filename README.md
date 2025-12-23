@@ -44,7 +44,7 @@ This Python implementation is based on a [contribution](https://github.com/jsonh
 
 ## Usage
 
-Everything you need is contained within `JsonhReader`:
+Everything you need is contained within `JSONHReader`:
 
 ```cs
 jsonh: str = """
@@ -52,5 +52,5 @@ jsonh: str = """
     this is: awesome
 }
 """
-json: str = JSONHParser.convert(jsonh)
+json: str = JSONHReader.to_json_from_string(jsonh)
 ```
