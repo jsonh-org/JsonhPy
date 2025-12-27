@@ -122,7 +122,7 @@ class JsonhReader:
                 return False
             # Object property
             else:
-                current_object: dict = current_elements[-1]
+                current_object: dict[str, object] = current_elements[-1]
                 current_object[current_property_name] = element
                 current_property_name = None
                 return False
@@ -174,11 +174,11 @@ class JsonhReader:
                             return JsonhResult.from_value(element)
                     # Start Object
                     case JsonTokenType.START_OBJECT:
-                        element: dict = {}
+                        element: dict[str, object] = {}
                         start_element(element)
                     # Start Array
                     case JsonTokenType.START_ARRAY:
-                        element: list = []
+                        element: list[object] = []
                         start_element(element)
                     # End Object/Array
                     case JsonTokenType.END_OBJECT, JsonTokenType.END_ARRAY:
