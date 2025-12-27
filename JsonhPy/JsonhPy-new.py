@@ -40,51 +40,196 @@ class JsonhRef[T]:
     def __init__(self, ref: T):
         self.ref = ref
 
+class JsonhVersion(Enum):
+    """
+    The major versions of the JSONH specification.
+    """
+    LATEST = 0
+    """
+    Indicates that the latest version should be used (currently V2).
+    """
+    V1 = 1
+    """
+    Version 1 of the specification, released 2025/03/19.
+    """
+    V2 = 2
+    """
+    Version 2 of the specification, released 2025/11/19.
+    """
+
 class JsonhReaderOptions:
-    pass
+    """
+    Options for a JsonhReader.
+    """
+    version: JsonhVersion.LATEST
+    """
+    Specifies the major version of the JSONH specification to use.
+    """
+    incomplete_inputs: bool = False
+    """
+    Enables/disables parsing unclosed inputs.
+    
+    ```
+    {
+      "key": "val
+    ```
+    
+    This is potentially useful for large language models that stream responses.
+    
+    Only some tokens can be incomplete in this mode, so it should not be relied upon.
+    """
+    parse_single_element: bool = False
+    """
+    Enables/disables checks for exactly one element when parsing.
+    
+    ```
+    "cat"
+    "dog" // Error: Expected single element
+    ```
+    
+    This option does not apply when reading elements, only when parsing elements.
+    """
+
+    def supports_version(self, minimum_version: JsonhVersion) -> bool:
+        """
+        Returns whether version is greater than or equal to minimum_version.
+        """
+
+        latest_version: JsonhVersion = JsonhVersion.V2
+
+        options_version: JsonhVersion = latest_version if self.version == JsonhVersion.LATEST else self.version
+        given_version: JsonhVersion = latest_version if minimum_version == JsonhVersion.LATEST else minimum_version
+
+        return options_version >= given_version
+
 
 class JsonTokenType(Enum):
+    """
+    The types of tokens that make up a JSON document.
+    """
     NONE = 0
+    """
+    Indicates that there is no value (not to be confused with NULL).
+    """
     START_OBJECT = 1
+    """
+    The start of an object.
+    
+    Example: `{`
+    """
     END_OBJECT = 2
+    """
+    The end of an object.
+
+    Example: `}`
+    """
     START_ARRAY = 3
+    """
+    The start of an array.
+
+    Example: `[`
+    """
     END_ARRAY = 4
+    """
+    The end of an array.
+
+    Example: `]`
+    """
     PROPERTY_NAME = 5
+    """
+    A property name in an object.
+
+    Example: `"key":`
+    """
     COMMENT = 6
+    """
+    A comment.
+
+    Example: `// comment`
+    """
     STRING = 7
+    """
+    A string.
+
+    Example: `"value"`
+    """
     NUMBER = 8
+    """
+    A number.
+
+    Example: `10`
+    """
     TRUE = 9
+    """
+    A true boolean.
+
+    Example: `true`
+    """
     FALSE = 10
+    """
+    A false boolean.
+
+    Example: `false`
+    """
     NULL = 11
+    """
+    A null value.
+    
+    Example: `null`
+    """
 
 class JsonhToken:
     json_type: JsonTokenType
     value: str
 
-    def __init__(self, json_type: JsonTokenType, value: str):
+    def __init__(self, json_type: JsonTokenType, value: str = ""):
         self.json_type = json_type
         self.value = value
 
 class JsonhReader:
-    # The string to read characters from.
     string: str
-    # The index in the string.
+    """
+    The string to read characters from.
+    """
     index: int
-    # The options to use when reading JSONH.
+    """
+    The index in the string.
+    """
     options: JsonhReaderOptions
-    # The number of characters read from the string.
+    """
+    The options to use when reading JSONH.
+    """
     char_counter: int
+    """
+    The number of characters read from the string.
+    """
 
-    # Characters that cannot be used unescaped in quoteless strings.
-    _RESERVED_CHARS = set(['\\', ',', ':', '[', ']', '{', '}', '/', '#', '"', '\'', '@'])
-    # Characters that are considered newlines.
+    def _reserved_chars(self):
+        """
+        Characters that cannot be used unescaped in quoteless strings.
+        """
+        return self._RESERVED_CHARS_V2 if self.options.supports_version(JsonhVersion.V2) else self._RESERVED_CHARS_V1
+
+    _RESERVED_CHARS_V1 = set(['\\', ',', ':', '[', ']', '{', '}', '/', '#', '"', '\''])
+    """
+    Characters that cannot be used unescaped in quoteless strings in JSONH V1.
+    """
+    _RESERVED_CHARS_V2 = set(['\\', ',', ':', '[', ']', '{', '}', '/', '#', '"', '\'', '@'])
+    """
+    Characters that cannot be used unescaped in quoteless strings in JSONH V2.
+    """
     _NEWLINE_CHARS = set(['\n', '\r', '\u2028', '\u2029'])
-    # Characters that are considered whitespace.
+    """
+    Characters that are considered newlines.
+    """
     _WHITESPACE_CHARS = set([
         '\u0020', '\u00A0', '\u1680', '\u2000', '\u2001', '\u2002', '\u2003', '\u2004', '\u2005',
         '\u2006', '\u2007', '\u2008', '\u2009', '\u200A', '\u202F', '\u205F', '\u3000', '\u2028',
         '\u2029', '\u0009', '\u000A', '\u000B', '\u000C', '\u000D', '\u0085',
     ])
+    """
+    Characters that are considered whitespace.
+    """
 
     def __init__(self, string: str, options: JsonhReaderOptions = JsonhReaderOptions()) -> None:
         """
@@ -209,12 +354,57 @@ class JsonhReader:
         return next_element
 
     def find_property_value(self, property_name: str) -> bool:
-        pass
+        """
+        Tries to find the given property name in the reader.
+        For example, to find `c`:
+        ```
+        // Original position
+        {
+          "a": "1",
+          "b": {
+            "c": "2"
+          },
+          "c":/* Final position */ "3"
+        }
+        ```
+        """
+        current_depth: int = 0
+
+        for token_result in self.read_element():
+            # Check error
+            if token_result.is_error:
+                return False
+
+            match token_result.value().json_type:
+                # Start structure
+                case JsonTokenType.START_OBJECT, JsonTokenType.START_ARRAY:
+                    current_depth += 1
+                # End structure
+                case JsonTokenType.END_OBJECT, JsonTokenType.END_ARRAY:
+                    current_depth -= 1
+                # Property name
+                case JsonTokenType.PROPERTY_NAME:
+                    if current_depth == 1 and token_result.value().value == property_name:
+                        # Path found
+                        return True
+
+        # Path not found
+        return False
 
     def has_token(self) -> bool:
-        pass
+        """
+        Reads whitespace and returns whether the reader contains another token.
+        """
+        # Whitespace
+        self._read_whitespace()
+
+        # Peek char
+        return self._peek() != None
 
     def read_end_of_elements(self) -> Iterator[JsonhResult]:
+        """
+        Reads comments and whitespace and errors if the reader contains another element.
+        """
         # Comments & whitespace
         for token in self._read_comments_and_whitespace():
             if token.is_error:
@@ -226,6 +416,9 @@ class JsonhReader:
             yield JsonhResult.from_error("Expected end of elements")
 
     def read_element(self) -> Iterator[JsonhResult[JsonhToken, str]]:
+        """
+        Reads a single element from the reader.
+        """
         # Comments & whitespace
         for token in self._read_comments_and_whitespace():
             if token.is_error:
@@ -271,28 +464,376 @@ class JsonhReader:
                 yield token
 
     def _read_object(self) -> Iterator[JsonhResult[JsonhToken, str]]:
-        pass
+        # Opening brace
+        if not self._read_one('{'):
+            # Braceless object
+            for token in self._read_braceless_object():
+                if token.is_error:
+                    yield token
+                    return
+                yield token
+        # Start object
+        yield JsonhResult.from_value(JsonhToken(JsonTokenType.START_OBJECT))
+
+        while True:
+            # Comments & whitespace
+            for token in self._read_comments_and_whitespace():
+                if token.is_error:
+                    yield token
+                    return
+                yield token
+
+            next: str | None = self._peek()
+            if next == None:
+                # End of incomplete object
+                if self.options.incomplete_inputs:
+                    yield JsonhResult.from_value(JsonhToken(JsonTokenType.END_OBJECT))
+                    return
+                # Missing closing brace
+                yield JsonhResult.from_error("Expected `}` to end object, got end of input")
+
+            # Closing brace
+            if next == '}':
+                # End of object
+                self._read()
+                yield JsonhResult.from_value(JsonhToken(JsonTokenType.END_OBJECT))
+                return
+            # Property
+            else:
+                for token in self._read_property():
+                    if token.is_error:
+                        yield token
+                        return
+                    yield token
 
     def _read_braceless_object(self, property_name_tokens: Iterable[JsonhToken] | None = None) -> Iterator[JsonhResult[JsonhToken, str]]:
-        pass
+        # Start of object
+        yield JsonhResult.from_value(JsonhToken(JsonTokenType.START_OBJECT))
+
+        # Initial tokens
+        if property_name_tokens != None:
+            for initial_token in self._read_property(property_name_tokens):
+                if initial_token.is_error:
+                    yield initial_token
+                    return
+                yield initial_token
+        
+        while True:
+            # Comments & whitespace
+            for token in self._read_comments_and_whitespace():
+                if token.is_error:
+                    yield token
+                    return
+                yield token
+            
+            if self._peek() == None:
+                # End of braceless object
+                yield JsonhResult.from_value(JsonhToken(JsonTokenType.END_OBJECT))
+                return
+            
+            # Property
+            for token in self._read_property():
+                if token.is_error:
+                    yield token
+                    return
+                yield token
 
     def _read_braceless_object_or_end_of_string(self, string_token: JsonhToken) -> Iterator[JsonhResult[JsonhToken, str]]:
-        pass
+        # Comments & whitespace
+        property_name_tokens: list[JsonhToken] = []
+        for comment_or_whitespace_token in self._read_comments_and_whitespace():
+            if comment_or_whitespace_token.is_error:
+                yield comment_or_whitespace_token
+                return
+            property_name_tokens.append(comment_or_whitespace_token.value())
+        
+        # String
+        if not self._read_one(':'):
+            # String
+            yield JsonhResult.from_value(string_token)
+            # Comments & whitespace
+            for comment_or_whitespace_token in property_name_tokens:
+                yield JsonhResult.from_value(comment_or_whitespace_token)
+            # End of string
+            return
+
+        # Property name
+        property_name_tokens.append(JsonhToken(JsonTokenType.PROPERTY_NAME, string_token.value))
+
+        # Braceless object
+        for object_token in self._read_braceless_object(property_name_tokens):
+            if object_token.is_error:
+                yield object_token
+                return
+            yield object_token
 
     def _read_property(self, property_name_tokens: Iterable[JsonhToken] | None = None) -> Iterator[JsonhResult[JsonhToken, str]]:
-        pass
+        if property_name_tokens != None:
+            for token in property_name_tokens:
+                yield JsonhResult.from_value(token)
+        else:
+            for token in self._read_property_name():
+                if token.is_error:
+                    yield token
+                    return
+                yield token
+
+        # Comments & whitespace
+        for token in self._read_comments_and_whitespace():
+            if token.is_error:
+                yield token
+                return
+            yield token
+        
+        # Property value
+        for token in self.read_element():
+            if token.is_error:
+                yield token
+                return
+            yield token
+
+        # Comments & whitespace
+        for token in self._read_comments_and_whitespace():
+            if token.is_error:
+                yield token
+                return
+            yield token
+
+        # Optional comma
+        self._read_one(',')
 
     def _read_property_name(self, string: str | None = None) -> Iterator[JsonhResult[JsonhToken, str]]:
-        pass
+        # String
+        if string == None:
+            string_token: JsonhResult[JsonhToken, str] = self._read_string()
+            if string_token.is_error:
+                yield string_token
+                return
+            string = string_token.value().value
+        
+        # Comments & whitespace
+        for token in self._read_comments_and_whitespace():
+            if token.is_error:
+                yield token
+                return
+            yield token
+
+        # Colon
+        if not self._read_one(':'):
+            yield JsonhResult.from_error("Expected `:` after property name in object")
+            return
+
+        # End of property name
+        yield JsonhResult.from_value(JsonhToken(JsonTokenType.PROPERTY_NAME, string))
 
     def _read_array(self) -> Iterator[JsonhResult[JsonhToken, str]]:
-        pass
+        # Opening bracket
+        if not self._read_one('['):
+            yield JsonhResult.from_error("Expected `[` to start array")
+            return
+        # Start of array
+        yield JsonhResult.from_value(JsonhToken(JsonTokenType.START_ARRAY))
+
+        while True:
+            # Comments & whitespace
+            for token in self._read_comments_and_whitespace():
+                if token.is_error:
+                    yield token
+                    return
+                yield token
+
+            next: str | None = self._peek()
+            if next == None:
+                # End of incomplete array
+                if self.options.incomplete_inputs:
+                    yield JsonhResult.from_value(JsonhToken(JsonTokenType.END_ARRAY))
+                    return
+                # Missing closing bracket
+                yield JsonhResult.from_error("Expected `]` to end array, got end of input")
+                return
+            
+            # Closing bracket
+            if next == ']':
+                # End of array
+                self._read()
+                yield JsonhResult.from_value(JsonhToken(JsonTokenType.END_ARRAY))
+                return
+            # Item
+            else:
+                for token in self._read_item():
+                    if token.is_error:
+                        yield token
+                        return
+                    yield token
 
     def _read_item(self) -> Iterator[JsonhResult[JsonhToken, str]]:
-        pass
+        # Element
+        for token in self.read_element():
+            if token.is_error:
+                yield token
+                return
+            yield token
+
+        # Comments & whitespace
+        for token in self._read_comments_and_whitespace():
+            if token.is_error:
+                yield token
+                return
+            yield token
+
+        # Optional comma
+        self._read_one(',')
 
     def _read_string(self) -> JsonhResult[JsonhToken, str]:
-        pass
+        # Verbatim
+        is_verbatim: bool = False
+        if self.options.supports_version(JsonhVersion.V2) and self._read_one('@'):
+            is_verbatim = True
+
+            # Ensure string immediately follows verbatim symbol
+            next: str | None = self._peek()
+            if next == None or next == '#' or next == '/' or next in self._WHITESPACE_CHARS:
+                return JsonhResult.from_error("Expected string to immediately follow verbatim symbol")
+
+        # Start quote
+        start_quote: str | None = self._read_any('"', '\'')
+        if start_quote == None:
+            return self._read_quoteless_string("", is_verbatim)
+
+        # Count multiple quotes
+        start_quote_counter = 0
+        while self._read_one(start_quote):
+            start_quote_counter += 1
+
+        # Empty string
+        if start_quote_counter == 2:
+            return JsonhResult.from_value(JsonhToken(JsonTokenType.STRING, ""))
+
+        # Count multiple end quotes
+        end_quote_counter: int = 0
+
+        # Read string
+        string_builder: str = ""
+
+        while True:
+            next: str | None = self._read()
+            if next == None:
+                return JsonhResult.from_error("Expected end of string, got end of input")
+
+            # Partial end quote was actually part of string
+            if next != start_quote:
+                string_builder += start_quote * end_quote_counter
+                end_quote_counter = 0
+
+            # End quote
+            if next == start_quote:
+                end_quote_counter += 1
+                if end_quote_counter == start_quote_counter:
+                    break
+            # Escape sequence
+            elif next == '\\':
+                if is_verbatim:
+                    string_builder += next
+                else:
+                    escape_sequence_result: JsonhResult[str, str] = self._read_escape_sequence()
+                    if escape_sequence_result.is_error:
+                        return JsonhResult.from_error(escape_sequence_result.error())
+                    string_builder += escape_sequence_result.value()
+            # Literal character
+            else:
+                string_builder += next
+
+        # Condition: skip remaining steps unless started with multiple quotes
+        if start_quote_counter > 1:
+            # Pass 1: count leading whitespace -> newline
+            has_leading_whitespace_newline: bool = False
+            leading_whitespace_newline_counter: int = 0
+            for index in range(0, len(string_builder)):
+                next: str = string_builder[index]
+
+                # Newline
+                if next in self._NEWLINE_CHARS:
+                    # Join CR LF
+                    if next == '\r' and index + 1 < len(string_builder) and string_builder[index + 1] == '\n':
+                        index += 1
+                    
+                    has_leading_whitespace_newline = True
+                    leading_whitespace_newline_counter = index + 1
+                    break
+                # Non-whitespace
+                elif next not in self._WHITESPACE_CHARS:
+                    break
+
+            # Condition: skip remaining steps if pass 1 failed
+            if has_leading_whitespace_newline:
+                # Pass 2: count trailing newline -> whitespace
+                has_trailing_newline_whitespace: bool = False
+                last_newline_index: int = 0
+                trailing_whitespace_counter: int = 0
+                for index in range(0, len(string_builder)):
+                    next: str = string_builder[index]
+
+                    # Newline
+                    if next in self._NEWLINE_CHARS:
+                        has_trailing_newline_whitespace = True
+                        last_newline_index = index
+                        trailing_whitespace_counter = 0
+
+                        # Join CR LF
+                        if next == '\r' and index + 1 < len(string_builder) and string_builder[index + 1] == '\n':
+                            index += 1
+                    # Whitespace
+                    elif next in self._WHITESPACE_CHARS:
+                        trailing_whitespace_counter += 1
+                    # Non-whitespace
+                    else:
+                        has_trailing_newline_whitespace = False
+                        trailing_whitespace_counter = 0
+
+                # Condition: skip remaining steps if pass 2 failed
+                if has_trailing_newline_whitespace:
+                    # Pass 3: strip trailing newline -> whitespace
+                    string_builder = string_builder[:last_newline_index]
+
+                    # Pass 4: strip leading whitespace -> newline
+                    string_builder = string_builder[leading_whitespace_newline_counter:]
+
+                    # Condition: skip remaining steps if no trailing whitespace
+                    if trailing_whitespace_counter > 0:
+                        # Pass 5: strip line-leading whitespace
+                        is_line_leading_whitespace: bool = True
+                        line_leading_whitespace_counter: int = 0
+                        for index in range(0, len(string_builder)):
+                            next: str = string_builder[index]
+
+                            # Newline
+                            if next in self._NEWLINE_CHARS:
+                                is_line_leading_whitespace = True
+                                line_leading_whitespace_counter = 0
+                            # Whitespace
+                            elif next in self._WHITESPACE_CHARS:
+                                if is_line_leading_whitespace:
+                                    # Increment line-leading whitespace
+                                    line_leading_whitespace_counter += 1
+
+                                    # Maximum line-leading whitespace reached
+                                    if line_leading_whitespace_counter == trailing_whitespace_counter:
+                                        # Remove line-leading whitespace
+                                        string_builder = string_builder[:(index + 1 - line_leading_whitespace_counter)] + string_builder[(index + 1):]
+                                        index -= line_leading_whitespace_counter
+                                        # Exit line-leading whitespace
+                                        is_line_leading_whitespace = False
+                            # Non-whitespace
+                            else:
+                                if is_line_leading_whitespace:
+                                    # Remove partial line-leading whitespace
+                                    string_builder = string_builder[:(index - line_leading_whitespace_counter)] + string_builder[index:]
+                                    index -= line_leading_whitespace_counter
+                                    # Exit line-leading whitespace
+                                    is_line_leading_whitespace = False
+
+        # End of string
+        return JsonhResult.from_value(JsonhToken(JsonTokenType.STRING, string_builder))
 
     def _read_quoteless_string(self, initial_chars: str = "", is_verbatim: bool = False) -> JsonhResult[JsonhToken, str]:
         pass
