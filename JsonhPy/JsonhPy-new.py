@@ -1082,22 +1082,234 @@ class JsonhReader:
             return self._read_quoteless_string(partial_chars_read)
 
     def _read_primitive_element(self) -> JsonhResult[JsonhToken, str]:
-        pass
+        # Peek char
+        next: str | None = self._peek()
+        if next == None:
+            return JsonhResult.from_error("Expected primitive element, got end of input")
+
+        # Number
+        if len(next) == 1 and ((ord('0') <= ord(next) <= ord('9')) or (next in ['-', '+', '.'])):
+            return self._read_number_or_quoteless_string()
+        # String
+        elif (next in ['"', '\'']) or (self.options.supports_version(JsonhVersion.V2) and next == '@'):
+            return self._read_string()
+        # Quoteless string (or named literal)
+        else:
+            return self._read_quoteless_string()
 
     def _read_comments_and_whitespace(self) -> Iterator[JsonhResult[JsonhToken, str]]:
-        pass
+        while True:
+            # Whitespace
+            self._read_whitespace()
+
+            # Peek char
+            next: str | None = self._peek()
+            if next == None:
+                return
+
+            # Comment
+            if next in ['#', '/']:
+                comment: JsonhResult[JsonhToken, str] = self._read_comment()
+                if comment.is_error:
+                    yield comment
+                    return
+                yield comment
+            # End of comments
+            else:
+                return
 
     def _read_comment(self) -> JsonhResult[JsonhToken, str]:
-        pass
+        block_comment: bool = False
+        start_nest_counter: int = 0
+
+        # Hash-style comment
+        if self._read_one('#'):
+            pass
+        elif self._read_one('/'):
+            # Line-style comment
+            if self._read_one('/'):
+                pass
+            # Block-style comment
+            elif self._read_one('*'):
+                block_comment = True
+            # Nestable block-style comment
+            elif self.options.supports_version(JsonhVersion.V2) and self._peek() == '=':
+                block_comment = True
+                while self._read_one('='):
+                    start_nest_counter += 1
+                if not self._read_one('*'):
+                    return JsonhResult.from_error("Expected `*` after start of nesting block comment")
+            else:
+                return JsonhResult.from_error("Unexpected `/`")
+        else:
+            return JsonhResult.from_error("Unexpected character")
+
+        # Read comment
+        comment_builder: str = ""
+
+        while True:
+            # Read char
+            next: str | None = self._read()
+
+            if block_comment:
+                # Error
+                if next == None:
+                    return JsonhResult.from_error("Expected end of block comment, got end of input")
+                
+                # End of block comment
+                if next == '*':
+                    # End of nestable block comment
+                    if self.options.supports_version(JsonhVersion.V2):
+                        # Count nests
+                        end_nest_counter: int = 0
+                        while end_nest_counter < start_nest_counter and self._read_one('='):
+                            end_nest_counter += 1
+                        # Partial end nestable block comment was actually part of comment
+                        if end_nest_counter < start_nest_counter or self._peek() != '/':
+                            comment_builder += '*'
+                            while end_nest_counter > 0:
+                                comment_builder += '='
+                                end_nest_counter -= 1
+                            continue
+
+                    # End of block comment
+                    if self._read_one('/'):
+                        return JsonhResult.from_value(JsonhToken(JsonTokenType.COMMENT, comment_builder))
+            else:
+                # End of line comment
+                if next == None or next in self._NEWLINE_CHARS:
+                    return JsonhResult.from_value(JsonhToken(JsonTokenType.COMMENT, comment_builder))
+
+            # Comment char
+            comment_builder += next
 
     def _read_whitespace(self) -> None:
-        pass
+        while True:
+            # Peek char
+            next: str | None = self._peek()
+            if next == None:
+                return
+            
+            # Whitespace
+            if next in self._WHITESPACE_CHARS:
+                self._read()
+            # End of whitespace
+            else:
+                return
 
     def _read_hex_sequence(self, length: int) -> JsonhResult[int, str]:
-        pass
+        hex_chars: str = ""
+
+        for index in range(0, length):
+            next: str | None = self._read()
+
+            # Hex digit
+            if next != None and ((ord('0') <= ord(next) <= ord('9')) or (ord('A') <= ord(next) <= ord('F')) or (ord('a') <= ord(next) <= ord('f'))):
+                hex_chars += next
+            # Unexpected char
+            else:
+                return JsonhResult.from_error("Incorrect number of hexadecimal digits in unicode escape sequence")
+
+        # Parse unicode character from hex digits
+        return JsonhResult.from_value(int(hex_chars, base=16))
 
     def _read_escape_sequence(self) -> JsonhResult[str, str]:
-        pass
+        escape_char: str | None = self._read()
+        if escape_char == None:
+            return JsonhResult.from_error("Expected escape sequence, got end of input")
+
+        match escape_char:
+            # Reverse solidus
+            case '\\':
+                return JsonhResult.from_value('\\')
+            # Backspace
+            case 'b':
+                return JsonhResult.from_value('\b')
+            # Form feed
+            case 'f':
+                return JsonhResult.from_value('\f')
+            # Newline
+            case 'n':
+                return JsonhResult.from_value('\n')
+            # Carriage return
+            case 'r':
+                return JsonhResult.from_value('\r')
+            # Tab
+            case 't':
+                return JsonhResult.from_value('\t')
+            # Vertical tab
+            case 'v':
+                return JsonhResult.from_value('\v')
+            # Null
+            case '0':
+                return JsonhResult.from_value('\0')
+            # Alert
+            case 'a':
+                return JsonhResult.from_value('\a')
+            # Escape
+            case 'e':
+                return JsonhResult.from_value('\u001b')
+            # Unicode hex sequence
+            case 'u':
+                return self._read_hex_escape_sequence(4)
+            # Short unicode hex sequence
+            case 'x':
+                return self._read_hex_escape_sequence(2)
+            # Long unicode hex sequence
+            case 'U':
+                return self._read_hex_escape_sequence(8)
+            # Escaped newline
+            case self._NEWLINE_CHARS:
+                # Join CR LF
+                if escape_char == 'r':
+                    self._read_one('\n')
+                return ""
+            # Other
+            case _:
+                return escape_char
+
+    def _read_hex_escape_sequence(self, length: int) -> JsonhResult[str, str]:
+        # This method is used to combine escaped UTF-16 surrogate pairs (e.g. "\uD83D\uDC7D" -> "👽")
+
+        # Read hex digits & convert to uint
+        code_point: JsonhResult[int, str] = self._read_hex_sequence(length)
+        if code_point.is_error:
+            return JsonhResult.from_error(code_point.error())
+
+        # High surrogate
+        if (self._is_utf16_high_surrogate(code_point.value())):
+            original_position: int = self.index
+            # Escape sequence
+            if self._read_one('\\'):
+                next: str | None = self._read_any('u', 'x', 'U')
+                # Low surrogate escape sequence
+                if next:
+                    # Read hex sequence
+                    low_code_point: JsonhResult[int, str]
+                    match next:
+                        case 'u':
+                            low_code_point = self._read_hex_sequence(4)
+                        case 'x':
+                            low_code_point = self._read_hex_sequence(2)
+                        case 'U':
+                            low_code_point = self._read_hex_sequence(8)
+                    # Ensure hex sequence read successfully
+                    if low_code_point.is_error:
+                        return JsonhResult.from_error(low_code_point.error())
+                    # Combine high and low surrogates
+                    code_point = self._utf16_surrogates_to_code_point(code_point.value(), low_code_point.value())
+                # Other escape sequence
+                else:
+                    self.index = original_position
+
+        # Rune
+        return chr(code_point)
+
+    def _utf16_surrogates_to_code_point(high_surrogate: int, low_surrogate: int) -> int:
+        return 0x10000 + (((high_surrogate - 0xD800) << 10) | (low_surrogate - 0xDC00))
+
+    def _is_utf16_high_surrogate(code_point: int) -> bool:
+        return code_point >= 0xD800 and code_point <= 0xDBFF
 
     def _peek(self) -> str | None:
         if self.index >= len(self.string):
