@@ -57,52 +57,6 @@ class JsonhVersion(Enum):
     Version 2 of the specification, released 2025/11/19.
     """
 
-class JsonhReaderOptions:
-    """
-    Options for a JsonhReader.
-    """
-    version: JsonhVersion.LATEST
-    """
-    Specifies the major version of the JSONH specification to use.
-    """
-    incomplete_inputs: bool = False
-    """
-    Enables/disables parsing unclosed inputs.
-    
-    ```
-    {
-      "key": "val
-    ```
-    
-    This is potentially useful for large language models that stream responses.
-    
-    Only some tokens can be incomplete in this mode, so it should not be relied upon.
-    """
-    parse_single_element: bool = False
-    """
-    Enables/disables checks for exactly one element when parsing.
-    
-    ```
-    "cat"
-    "dog" // Error: Expected single element
-    ```
-    
-    This option does not apply when reading elements, only when parsing elements.
-    """
-
-    def supports_version(self, minimum_version: JsonhVersion) -> bool:
-        """
-        Returns whether version is greater than or equal to minimum_version.
-        """
-
-        latest_version: JsonhVersion = JsonhVersion.V2
-
-        options_version: JsonhVersion = latest_version if self.version == JsonhVersion.LATEST else self.version
-        given_version: JsonhVersion = latest_version if minimum_version == JsonhVersion.LATEST else minimum_version
-
-        return options_version >= given_version
-
-
 class JsonTokenType(Enum):
     """
     The types of tokens that make up a JSON document.
@@ -185,6 +139,176 @@ class JsonhToken:
     def __init__(self, json_type: JsonTokenType, value: str = ""):
         self.json_type = json_type
         self.value = value
+
+class JsonhNumberParser:
+    """
+    Methods for parsing JSONH numbers.
+
+    Unlike `JsonhReader.read_element()`, minimal validation is done here. Ensure the input is valid.
+    """
+    @staticmethod
+    def parse(jsonh_number: str) -> JsonhResult[float, str]:
+        # Remove underscores
+        jsonh_number = jsonh_number.replace("_", "")
+        digits: str = jsonh_number
+
+        # Get sign
+        sign: int = 1
+        if digits.startswith('-'):
+            sign = -1
+            digits = digits[1:]
+        elif digits.startswith('+'):
+            sign = 1
+            digits = digits[1:]
+
+        # Decimal
+        base_digits: str = "0123456789"
+        # Hexadecimal
+        if digits.startswith("0x") or digits.startswith("0X"):
+            base_digits = "0123456789abcdef"
+            digits = digits[2:]
+        # Binary
+        elif digits.startswith("0b") or digits.startswith("0B"):
+            base_digits = "01"
+            digits = digits[2:]
+        # Octal
+        elif digits.startswith("0o") or digits.startswith("0O"):
+            base_digits = "01234567"
+            digits = digits[2:]
+
+        # Parse number with base digits
+        number: JsonhResult[float, str] = JsonhNumberParser._parse_fractional_number_with_exponent(digits, base_digits)
+        if number.is_error:
+            return number
+
+        # Apply sign
+        if sign != 1:
+            number.value_or_none *= sign
+        return number
+
+    @staticmethod
+    def _parse_fractional_number_with_exponent(digits: str, base_digits: str) -> JsonhResult[float, str]:
+        """
+        Converts a fractional number with an exponent (e.g. `12.3e4.5`) from the given base (e.g. `01234567`) to a base-10 real.
+        """
+        # Find exponent
+        exponent_index: int = -1
+        # Hexadecimal exponent
+        if 'e' in base_digits:
+            for index in range(0, len(digits)):
+                if digits[index] not in ['e', 'E']:
+                    continue
+                if index + 1 >= len(digits) or digits[index] not in ['-', '+']:
+                    continue
+                exponent_index = index
+                break
+        # Exponent
+        else:
+            exponent_index = JsonhNumberParser._index_of_any(digits, ['e', 'E'])
+
+        # If no exponent then parse real
+        if exponent_index < 0:
+            return JsonhNumberParser._parse_fractional_number(digits, base_digits)
+
+        # Get mantissa and exponent
+        mantissa_part: str = digits[0:exponent_index]
+        exponent_part: str = digits[(exponent_index + 1):]
+
+        # Parse mantissa and exponent
+        mantissa: JsonhResult[float, str] = JsonhNumberParser._parse_fractional_number(mantissa_part, base_digits)
+        if mantissa.is_error:
+            return mantissa
+        exponent: JsonhResult[float, str] = JsonhNumberParser._parse_fractional_number(exponent_part, base_digits)
+        if exponent.is_error:
+            return exponent
+
+        # Multiply mantissa by 10 ^ exponent
+        return JsonhResult.from_value(mantissa.value() * (10 ** exponent.value()))
+
+    @staticmethod
+    def _parse_fractional_number(digits: str, base_digits: str) -> JsonhResult[float, str]:
+        """
+        Converts a fractional number (e.g. `123.45`) from the given base (e.g. `01234567`) to a base-10 real.
+        """
+        # Find dot index
+        dot_index: int = digits.find('.')
+        # If no dot then normalize integer
+        if dot_index < 0:
+            return JsonhNumberParser._parse_whole_number(digits, base_digits)
+
+        # Get parts of number
+        whole_part: str = digits[0:dot_index]
+        fractional_part: str = digits[(dot_index + 1):]
+
+        # Parse parts of number
+        whole: JsonhResult[int, str] = JsonhNumberParser._parse_whole_number(whole_part, base_digits)
+        if whole.is_error:
+            return whole
+        fraction: JsonhResult[int, str] = JsonhNumberParser._parse_whole_number(fractional_part, base_digits)
+        if fraction.is_error:
+            return fraction
+
+        # Combine whole and fraction
+        return JsonhResult.from_value(float(str(whole.value()) + "." + str(fraction.value())))
+
+    @staticmethod
+    def _parse_whole_number(digits: str, base_digits: str) -> JsonhResult[int, str]:
+        """
+        Converts a whole number (e.g. `12345`) from the given base (e.g. `01234567`) to a base-10 integer.
+        """
+
+    @staticmethod
+    def _index_of_any(input: str, chars: Iterable[str]) -> float:
+        for i in range(0, len(input)):
+            char: str = input[i]
+            if char in chars:
+                return i
+        return -1
+
+class JsonhReaderOptions:
+    """
+    Options for a JsonhReader.
+    """
+    version: JsonhVersion.LATEST
+    """
+    Specifies the major version of the JSONH specification to use.
+    """
+    incomplete_inputs: bool = False
+    """
+    Enables/disables parsing unclosed inputs.
+    
+    ```
+    {
+      "key": "val
+    ```
+    
+    This is potentially useful for large language models that stream responses.
+    
+    Only some tokens can be incomplete in this mode, so it should not be relied upon.
+    """
+    parse_single_element: bool = False
+    """
+    Enables/disables checks for exactly one element when parsing.
+    
+    ```
+    "cat"
+    "dog" // Error: Expected single element
+    ```
+    
+    This option does not apply when reading elements, only when parsing elements.
+    """
+
+    def supports_version(self, minimum_version: JsonhVersion) -> bool:
+        """
+        Returns whether version is greater than or equal to minimum_version.
+        """
+
+        latest_version: JsonhVersion = JsonhVersion.V2
+
+        options_version: JsonhVersion = latest_version if self.version == JsonhVersion.LATEST else self.version
+        given_version: JsonhVersion = latest_version if minimum_version == JsonhVersion.LATEST else minimum_version
+
+        return options_version >= given_version
 
 class JsonhReader:
     string: str
