@@ -204,7 +204,7 @@ class JsonhReader:
     The number of characters read from the string.
     """
 
-    def _reserved_chars(self):
+    def _RESERVED_CHARS(self):
         """
         Characters that cannot be used unescaped in quoteless strings.
         """
@@ -836,19 +836,250 @@ class JsonhReader:
         return JsonhResult.from_value(JsonhToken(JsonTokenType.STRING, string_builder))
 
     def _read_quoteless_string(self, initial_chars: str = "", is_verbatim: bool = False) -> JsonhResult[JsonhToken, str]:
-        pass
+        is_named_literal_possible: bool = False
+
+        # Read quoteless string
+        string_builder: str = initial_chars
+
+        while True:
+            # Peek char
+            next: str | None = self._peek()
+            if next == None:
+                break
+
+            # Escape sequence
+            if next == '\\':
+                self._read()
+                if is_verbatim:
+                    string_builder += next
+                else:
+                    escape_sequence_result: JsonhResult[str] = self._read_escape_sequence()
+                    if escape_sequence_result.is_error:
+                        return JsonhResult.from_error(escape_sequence_result.error())
+                    string_builder += escape_sequence_result.value()
+                is_named_literal_possible = False
+            # End on reserved character
+            elif next in self._RESERVED_CHARS():
+                break
+            # End on newline
+            elif next in self._NEWLINE_CHARS:
+                break
+            # Literal character
+            else:
+                self._read()
+                string_builder += next
+
+        # Ensure not empty
+        if len(string_builder) == 0:
+            return JsonhResult.from_error("Empty quoteless string")
+
+        # Trim whitespace
+        string_builder = self._strip_any(string_builder, self._WHITESPACE_CHARS)
+
+        # Match named literal
+        if is_named_literal_possible:
+            match string_builder:
+                case "null":
+                    return JsonhResult.from_value(JsonhToken(JsonTokenType.NULL))
+                case "true":
+                    return JsonhResult.from_value(JsonhToken(JsonTokenType.TRUE))
+                case "false":
+                    return JsonhResult.from_value(JsonhToken(JsonTokenType.FALSE))
+
+        # End of quoteless string
+        return JsonhResult.from_value(JsonhToken(JsonTokenType.STRING, string_builder))
 
     def _detect_quoteless_string(self) -> tuple[bool, str]:
-        pass
+        # Read whitespace
+        whitespace_builder: str = ""
+
+        while True:
+            # Read char
+            next: str | None = self._peek()
+            if next == None:
+                break
+
+            # Newline
+            if next in self._NEWLINE_CHARS:
+                # Quoteless strings cannot contain unescaped newlines
+                found_quoteless_string: bool = False
+                whitespace_chars: str = whitespace_builder
+                return found_quoteless_string, whitespace_chars
+
+            # End of whitespace
+            if next not in self._WHITESPACE_CHARS:
+                break
+
+            # Whitespace
+            whitespace_builder += next
+            self._read()
+
+        # Found quoteless string if found backslash or non-reserved char
+        next_char: str | None = self._peek()
+        found_quoteless_string: bool = next_char != None and (next_char == '\\' or next_char not in self._RESERVED_CHARS())
+        whitespace_chars: str = whitespace_builder
+        return found_quoteless_string, whitespace_chars
 
     def _read_number(self) -> tuple[JsonhResult[JsonhToken, str], str]:
-        pass
+        # Read number
+        number_builder: JsonhRef[str] = JsonhRef[str]("")
 
-    def _read_number_no_exponent(self, number_builder: JsonhRef, base_digits: str, has_base_specifier: bool = False, has_leading_zero: bool = False) -> JsonhResult[None, None]:
-        pass
+        # Read sign
+        sign: str | None = self._read_any('-', '+')
+        if sign != None:
+            number_builder.ref += sign
+
+        # Read base
+        base_digits: str = "0123456789"
+        has_base_specifier: bool = False
+        has_leading_zero: bool = False
+        if self._read_one('0'):
+            number_builder.ref += '0'
+            has_leading_zero = True
+
+            hex_base_char: str | None = self._read_any('x', 'X')
+            if hex_base_char != None:
+                number_builder.ref += hex_base_char
+                base_digits = "0123456789abcdef"
+                has_base_specifier = True
+                has_leading_zero = False
+            else:
+                binary_base_char: str | None = self._read_any('b', 'B')
+                if binary_base_char != None:
+                    number_builder.ref += binary_base_char
+                    base_digits = "01"
+                    has_base_specifier = True
+                    has_leading_zero = False
+                else:
+                    octal_base_char: str | None = self._read_any('o', 'O')
+                    if octal_base_char != None:
+                        number_builder.ref += octal_base_char
+                        base_digits = "01234567"
+                        has_base_specifier = True
+                        has_leading_zero = False
+
+        # Read main number
+        main_result: JsonhResult[None, None] = self._read_number_no_exponent(number_builder, base_digits, has_base_specifier, has_leading_zero)
+        if main_result.is_error:
+            number: JsonhResult[None, str] = JsonhResult.from_error(main_result.error())
+            partial_chars_read: str = number_builder.ref
+            return number, partial_chars_read
+
+        # Possible hexadecimal exponent
+        if number_builder.ref[-1] in ['e', 'E']:
+            # Read sign (mandatory)
+            exponent_sign: str | None = self._read_any('-', '+')
+            if exponent_sign != None:
+                number_builder.ref += exponent_sign
+
+                # Missing digit between base specifier and exponent (e.g. `0xe+`)
+                if has_base_specifier and len(number_builder.ref) == 4:
+                    number: JsonhResult[None, str] = JsonhResult.from_error("Missing digit between base specifier and exponent")
+                    partial_chars_read: str = number_builder.ref
+                    return number, partial_chars_read
+
+                # Read exponent number
+                exponent_result: JsonhResult[None, None] = self._read_number_no_exponent(number_builder, base_digits)
+                if exponent_result.is_error:
+                    number: JsonhResult[None, str] = JsonhResult.from_error(exponent_result.error())
+                    partial_chars_read: str = number_builder.ref
+                    return number, partial_chars_read
+        # Exponent
+        else:
+            exponent_char: str | None = self._read_any('e', 'E')
+            if exponent_char != None:
+                number_builder.ref += exponent_char
+
+                # Read sign
+                exponent_sign: str | None = self._read_any('-', '+')
+                if exponent_sign != None:
+                    number_builder.ref += exponent_sign
+
+                # Read exponent number
+                exponent_result: JsonhResult[None, None] = self._read_number_no_exponent(number_builder, base_digits)
+                if exponent_result.is_error:
+                    number: JsonhResult[None, str] = JsonhResult.from_error(exponent_result.error())
+                    partial_chars_read: str = number_builder.ref
+                    return number, partial_chars_read
+
+        # End of number
+        number: JsonhResult[JsonhToken, str] = JsonhResult.from_value(JsonhToken(JsonTokenType.NUMBER, number_builder.ref))
+        partial_chars_read: str = ""
+        return number, partial_chars_read
+
+    def _read_number_no_exponent(self, number_builder: JsonhRef[str], base_digits: str, has_base_specifier: bool = False, has_leading_zero: bool = False) -> JsonhResult[None, None]:
+        # Leading underscore
+        if (not has_base_specifier) and self._peek() == '_':
+            return JsonhResult.from_error("Leading `_` in number")
+
+        is_fraction: bool = False
+        is_empty: bool = True
+
+        # Leading zero (not base specifier)
+        if has_leading_zero:
+            is_empty = False
+
+        while True:
+            # Peek char
+            next: str | None = self._peek()
+            if next == None:
+                break
+
+            # Digit
+            if next.lower() in base_digits:
+                self._read()
+                number_builder.ref += next
+                is_empty = False
+            # Dot
+            elif next == '.':
+                self._read()
+                number_builder.ref += next
+                is_empty = False
+
+                # Duplicate dot
+                if is_fraction:
+                    return JsonhResult.from_error("Duplicate `.` in number")
+                is_fraction = True
+            # Underscore
+            elif next == '_':
+                self._read()
+                number_builder.ref += next
+                is_empty = False
+            # Other
+            else:
+                break
+
+        # Ensure not empty
+        if is_empty:
+            return JsonhResult.from_error("Empty number")
+
+        # Ensure at least one digit
+        if not self._contains_any_except(number_builder.ref, ['.', '-', '+', '_']):
+            return JsonhResult.from_error("Number must have at least one digit")
+
+        # Trailing underscore
+        if number_builder.ref.endswith('_'):
+            return JsonhResult.from_error("Trailing `_` in number")
+
+        # End of number
+        return JsonhResult.from_value()
 
     def _read_number_or_quoteless_string(self) -> JsonhResult[JsonhToken, str]:
-        pass
+        # Read number
+        number: JsonhResult[JsonhToken, str]; partial_chars_read: str
+        number, partial_chars_read = self._read_number()
+        if not number.is_error:
+            # Try read quoteless string starting with number
+            found_quoteless_string: bool; whitespace_chars: str
+            found_quoteless_string, whitespace_chars = self._detect_quoteless_string()
+            if found_quoteless_string:
+                return self._read_quoteless_string(number.value().value + whitespace_chars)
+            # Otherwise, accept number
+            else:
+                return number
+        # Read quoteless string starting with malformed number
+        else:
+            return self._read_quoteless_string(partial_chars_read)
 
     def _read_primitive_element(self) -> JsonhResult[JsonhToken, str]:
         pass
@@ -899,3 +1130,23 @@ class JsonhReader:
         # Option matched
         self._read()
         return next
+
+    @staticmethod
+    def _strip_any(input: str, trim_chars: Iterable[str]) -> str:
+        start: int = 0
+        end: int = len(input)
+
+        while start < end and input[start] in trim_chars:
+            start += 1
+
+        while end > start and input[end - 1] in trim_chars:
+            end -= 1
+
+        return input[start:end]
+
+    @staticmethod
+    def _contains_any_except(input: str, allowed: Iterable[str]) -> bool:
+        for char in input:
+            if char not in allowed:
+                return True
+        return False
