@@ -329,6 +329,14 @@ class JsonhReaderOptions:
     This option does not apply when reading elements, only when parsing elements.
     """
 
+    def __init__(self, version: JsonhVersion = JsonhVersion.LATEST, incomplete_inputs: bool = False, parse_single_element: bool = False):
+        """
+        Constructs options for a JsonhReader.
+        """
+        self.version = version
+        self.incomplete_inputs = incomplete_inputs
+        self.parse_single_element = parse_single_element
+
     def supports_version(self, minimum_version: JsonhVersion) -> bool:
         """
         Returns whether version is greater than or equal to minimum_version.
@@ -395,13 +403,13 @@ class JsonhReader:
         self.char_counter = 0
 
     @staticmethod
-    def parse_element_from_string(string: str, options: JsonhReaderOptions = JsonhReaderOptions()) -> object:
+    def parse_element_from_string(string: str, options: JsonhReaderOptions = JsonhReaderOptions()) -> JsonhResult[object, str]:
         """
         Parses a single element from a string.
         """
         return JsonhReader(string, options).parse_element()
 
-    def parse_element(self) -> object:
+    def parse_element(self) -> JsonhResult[object, str]:
         """
         Parses a single element from the reader.
         """
@@ -434,7 +442,7 @@ class JsonhReader:
             submit_element(element)
             current_elements.append(element)
 
-        def parse_next_element() -> None:
+        def parse_next_element() -> JsonhResult[object, str]:
             nonlocal self
             nonlocal current_property_name
             
