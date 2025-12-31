@@ -198,7 +198,7 @@ class JsonhNumberParser:
             for index in range(0, len(digits)):
                 if digits[index] not in ['e', 'E']:
                     continue
-                if index + 1 >= len(digits) or digits[index] not in ['-', '+']:
+                if index + 1 >= len(digits) or (digits[index + 1] not in ['-', '+']):
                     continue
                 exponent_index = index
                 break
@@ -211,7 +211,7 @@ class JsonhNumberParser:
             return JsonhNumberParser._parse_fractional_number(digits, base_digits)
 
         # Get mantissa and exponent
-        mantissa_part: str = digits[0:exponent_index]
+        mantissa_part: str = digits[:exponent_index]
         exponent_part: str = digits[(exponent_index + 1):]
 
         # Parse mantissa and exponent
@@ -237,7 +237,7 @@ class JsonhNumberParser:
             return JsonhNumberParser._parse_whole_number(digits, base_digits)
 
         # Get parts of number
-        whole_part: str = digits[0:dot_index]
+        whole_part: str = digits[:dot_index]
         fractional_part: str = digits[(dot_index + 1):]
 
         # Parse parts of number
@@ -1011,7 +1011,7 @@ class JsonhReader:
         return JsonhResult.from_value(JsonhToken(JsonTokenType.STRING, string_builder))
 
     def _read_quoteless_string(self, initial_chars: str = "", is_verbatim: bool = False) -> JsonhResult[JsonhToken, str]:
-        is_named_literal_possible: bool = False
+        is_named_literal_possible: bool = not is_verbatim
 
         # Read quoteless string
         string_builder: str = initial_chars
