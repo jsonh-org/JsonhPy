@@ -256,6 +256,37 @@ class JsonhNumberParser:
         """
         Converts a whole number (e.g. `12345`) from the given base (e.g. `01234567`) to a base-10 integer.
         """
+        # Get sign
+        sign: int = 1
+        if digits.startswith('-'):
+            sign = -1
+            digits = digits[1:]
+        elif digits.startswith('+'):
+            sign = 1
+            digits = digits[1:]
+
+        # Add each column of digits
+        integer: int = 0
+        for index in range(0, len(digits)):
+            # Get current digit
+            digit_char: str = digits[index]
+            digit_int: int = base_digits.find(digit_char.lower())
+
+            # Ensure digit is valid
+            if digit_int < 0:
+                return JsonhResult.from_error(f"Invalid digit: '{digit_char}'")
+
+            # Get magnitude of current digit column
+            column_number: int = len(digits) - 1 - index
+            column_magnitude: int = len(base_digits) ** column_number
+
+            # Add value of column
+            integer += digit_int * column_magnitude
+
+        # Apply sign
+        if sign != 1:
+            integer *= sign
+        return JsonhResult.from_value(integer)
 
     @staticmethod
     def _index_of_any(input: str, chars: Iterable[str]) -> float:
