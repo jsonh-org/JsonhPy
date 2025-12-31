@@ -9,9 +9,7 @@ Since JSONH is compatible with JSON, any JSONH syntax can be represented with eq
 
 ## JsonhPy
 
-JsonhPy is a parser implementation of [JSONH V2](https://github.com/jsonh-org/Jsonh) for Python 3.
-
-This Python implementation is based on a [contribution](https://github.com/jsonh-org/Jsonh/issues/9) by [pythagorean](https://github.com/pythagorean) (MIT).
+JsonhPy is a parser implementation of [JSONH V1 & V2](https://github.com/jsonh-org/Jsonh) for Python 3.
 
 ## Example
 
@@ -44,13 +42,15 @@ This Python implementation is based on a [contribution](https://github.com/jsonh
 
 ## Usage
 
-Everything you need is contained within `JSONHReader`:
+Everything you need is contained within `JsonhReader`:
 
-```cs
+```py
+from JsonhPy import JsonhReader
+
 jsonh: str = """
 {
     this is: awesome
 }
 """
-json: str = JSONHReader.to_json_from_string(jsonh)
+json: str = JsonhReader.parse_element_from_string(jsonh).value()
 ```
