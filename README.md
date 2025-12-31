@@ -1,8 +1,8 @@
 <img src="https://github.com/jsonh-org/Jsonh/blob/main/IconUpscaled.png?raw=true" width=180>
 
-**JSON for Humans.**
-
 [![PyPI](https://img.shields.io/pypi/v/JsonhPy.svg)](https://pypi.python.org/pypi/JsonhPy)
+
+**JSON for Humans.**
 
 JSON is great. Until you miss that trailing comma... or want to use comments. What about multiline strings?
 JSONH provides a much more elegant way to write JSON that's designed for humans rather than machines.
