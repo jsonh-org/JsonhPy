@@ -87,7 +87,7 @@ class JsonhPyTests(unittest.TestCase):
     4 5, 6
 ]
 '''
-        element: str = JsonhReader.parse_element_from_string(jsonh).value()
+        element: list[object] = JsonhReader.parse_element_from_string(jsonh).value()
 
         self.assertEqual(len(element), 5)
         self.assertEqual(element[0], 1)
@@ -97,7 +97,7 @@ class JsonhPyTests(unittest.TestCase):
         self.assertEqual(element[4], 6)
 
     def test_NumberParserTest(self):
-        self.assertEqual(math.trunc(JsonhNumberParser.parse("1.2e3.4")), 3014)
+        self.assertEqual(math.trunc(JsonhNumberParser.parse("1.2e3.4").value()), 3014)
 
     def test_BracelessObjectTest(self):
         jsonh: str = """
@@ -152,7 +152,7 @@ c : d
         jsonh2: str = """
 @"a\\\\": @'''b\\\\'''
 """
-        element3: dict[str, str] = JsonhReader.parse_element_from_string(jsonh).value()
+        element3: dict[str, str] = JsonhReader.parse_element_from_string(jsonh2).value()
 
         self.assertEqual(len(element3), 1)
         self.assertEqual(element3["a\\\\"], "b\\\\")

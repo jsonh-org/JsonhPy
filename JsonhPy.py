@@ -12,12 +12,12 @@ class JsonhResult[T, E]:
         self.error_or_none = error_or_none
 
     @staticmethod
-    def from_value[T, E](value: T) -> "JsonhResult[T, E]":
-        return JsonhResult(True, value_or_none=value)
+    def from_value[T, E](value: T = None) -> "JsonhResult[T, E]":
+        return JsonhResult(False, value, None)
 
     @staticmethod
-    def from_error[T, E](error: E) -> "JsonhResult[T, E]":
-        return JsonhResult(False, error_or_none=error)
+    def from_error[T, E](error: E = None) -> "JsonhResult[T, E]":
+        return JsonhResult(True, None, error)
 
     def value(self) -> T:
         if self.is_error:
@@ -347,7 +347,7 @@ class JsonhReaderOptions:
         options_version: JsonhVersion = latest_version if self.version == JsonhVersion.LATEST else self.version
         given_version: JsonhVersion = latest_version if minimum_version == JsonhVersion.LATEST else minimum_version
 
-        return options_version >= given_version
+        return options_version.value >= given_version.value
 
 class JsonhReader:
     string: str
@@ -399,6 +399,7 @@ class JsonhReader:
         Constructs a reader that reads JSONH from a string.
         """
         self.string = string
+        self.index = 0
         self.options = options
         self.char_counter = 0
 
@@ -445,13 +446,13 @@ class JsonhReader:
         def parse_next_element() -> JsonhResult[object, str]:
             nonlocal self
             nonlocal current_property_name
-            
+
             for token_result in self.read_element():
                 # Check error
                 if token_result.is_error:
-                    return JsonhResult.from_error(token_result.error)
-                
-                match token_result.value.json_type:
+                    return JsonhResult.from_error(token_result.error())
+
+                match token_result.value().json_type:
                     # Null
                     case JsonTokenType.NULL:
                         element: None = None
@@ -477,7 +478,7 @@ class JsonhReader:
                         result: JsonhResult[float] = JsonhNumberParser.parse(token_result.value().value)
                         if result.is_error:
                             return JsonhResult.from_error(result.error())
-                        element: float = token_result.value().value
+                        element: float = result.value()
                         if submit_element(element):
                             return JsonhResult.from_value(element)
                     # Start Object
@@ -489,7 +490,7 @@ class JsonhReader:
                         element: list[object] = []
                         start_element(element)
                     # End Object/Array
-                    case JsonTokenType.END_OBJECT, JsonTokenType.END_ARRAY:
+                    case JsonTokenType.END_OBJECT | JsonTokenType.END_ARRAY:
                         # Nested element
                         if len(current_elements) > 1:
                             current_elements.pop()
@@ -510,7 +511,7 @@ class JsonhReader:
 
         # Ensure exactly one element
         if self.options.parse_single_element:
-            for token in self._read_end_of_elements():
+            for token in self.read_end_of_elements():
                 if token.is_error:
                     return JsonhResult.from_error(token.error())
 
@@ -540,10 +541,10 @@ class JsonhReader:
 
             match token_result.value().json_type:
                 # Start structure
-                case JsonTokenType.START_OBJECT, JsonTokenType.START_ARRAY:
+                case JsonTokenType.START_OBJECT | JsonTokenType.START_ARRAY:
                     current_depth += 1
                 # End structure
-                case JsonTokenType.END_OBJECT, JsonTokenType.END_ARRAY:
+                case JsonTokenType.END_OBJECT | JsonTokenType.END_ARRAY:
                     current_depth -= 1
                 # Property name
                 case JsonTokenType.PROPERTY_NAME:
@@ -573,6 +574,7 @@ class JsonhReader:
             if token.is_error:
                 yield JsonhResult.from_error(token.error())
                 return
+            yield token
         
         # Peek char
         if self._peek() != None:
@@ -587,6 +589,7 @@ class JsonhReader:
             if token.is_error:
                 yield JsonhResult.from_error(token.error())
                 return
+            yield token
 
         # Peek char
         next: str | None = self._peek()
@@ -864,7 +867,7 @@ class JsonhReader:
             return self._read_quoteless_string("", is_verbatim)
 
         # Count multiple quotes
-        start_quote_counter = 0
+        start_quote_counter = 1
         while self._read_one(start_quote):
             start_quote_counter += 1
 
@@ -911,7 +914,8 @@ class JsonhReader:
             # Pass 1: count leading whitespace -> newline
             has_leading_whitespace_newline: bool = False
             leading_whitespace_newline_counter: int = 0
-            for index in range(0, len(string_builder)):
+            index: int = 0
+            while index < len(string_builder):
                 next: str = string_builder[index]
 
                 # Newline
@@ -927,13 +931,16 @@ class JsonhReader:
                 elif next not in self._WHITESPACE_CHARS:
                     break
 
+                index += 1
+
             # Condition: skip remaining steps if pass 1 failed
             if has_leading_whitespace_newline:
                 # Pass 2: count trailing newline -> whitespace
                 has_trailing_newline_whitespace: bool = False
                 last_newline_index: int = 0
                 trailing_whitespace_counter: int = 0
-                for index in range(0, len(string_builder)):
+                index: int = 0
+                while index < len(string_builder):
                     next: str = string_builder[index]
 
                     # Newline
@@ -953,6 +960,8 @@ class JsonhReader:
                         has_trailing_newline_whitespace = False
                         trailing_whitespace_counter = 0
 
+                    index += 1
+
                 # Condition: skip remaining steps if pass 2 failed
                 if has_trailing_newline_whitespace:
                     # Pass 3: strip trailing newline -> whitespace
@@ -966,7 +975,8 @@ class JsonhReader:
                         # Pass 5: strip line-leading whitespace
                         is_line_leading_whitespace: bool = True
                         line_leading_whitespace_counter: int = 0
-                        for index in range(0, len(string_builder)):
+                        index: int = 0
+                        while index < len(string_builder):
                             next: str = string_builder[index]
 
                             # Newline
@@ -994,6 +1004,8 @@ class JsonhReader:
                                     index -= line_leading_whitespace_counter
                                     # Exit line-leading whitespace
                                     is_line_leading_whitespace = False
+
+                            index += 1
 
         # End of string
         return JsonhResult.from_value(JsonhToken(JsonTokenType.STRING, string_builder))
@@ -1426,10 +1438,10 @@ class JsonhReader:
                 # Join CR LF
                 if escape_char == 'r':
                     self._read_one('\n')
-                return ""
+                return JsonhResult.from_value("")
             # Other
             case _:
-                return escape_char
+                return JsonhResult.from_value(escape_char)
 
     def _read_hex_escape_sequence(self, length: int) -> JsonhResult[str, str]:
         # This method is used to combine escaped UTF-16 surrogate pairs (e.g. "\uD83D\uDC7D" -> "👽")
@@ -1460,17 +1472,19 @@ class JsonhReader:
                     if low_code_point.is_error:
                         return JsonhResult.from_error(low_code_point.error())
                     # Combine high and low surrogates
-                    code_point = self._utf16_surrogates_to_code_point(code_point.value(), low_code_point.value())
+                    code_point.value_or_none = self._utf16_surrogates_to_code_point(code_point.value(), low_code_point.value())
                 # Other escape sequence
                 else:
                     self.index = original_position
 
         # Rune
-        return chr(code_point)
+        return JsonhResult.from_value(chr(code_point.value()))
 
+    @staticmethod
     def _utf16_surrogates_to_code_point(high_surrogate: int, low_surrogate: int) -> int:
         return 0x10000 + (((high_surrogate - 0xD800) << 10) | (low_surrogate - 0xDC00))
 
+    @staticmethod
     def _is_utf16_high_surrogate(code_point: int) -> bool:
         return code_point >= 0xD800 and code_point <= 0xDBFF
 
