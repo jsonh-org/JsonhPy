@@ -2,6 +2,8 @@
 
 **JSON for Humans.**
 
+[![PyPI](https://img.shields.io/pypi/v/JsonhPy.svg)](https://pypi.python.org/pypi/JsonhPy)
+
 JSON is great. Until you miss that trailing comma... or want to use comments. What about multiline strings?
 JSONH provides a much more elegant way to write JSON that's designed for humans rather than machines.
 
@@ -45,7 +47,7 @@ JsonhPy is a parser implementation of [JSONH V1 & V2](https://github.com/jsonh-o
 Everything you need is contained within `JsonhReader`:
 
 ```py
-from JsonhPy import JsonhReader
+from JsonhPy.JsonhPy import *
 
 jsonh: str = """
 {
