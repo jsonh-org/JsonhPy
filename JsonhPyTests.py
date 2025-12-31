@@ -1,6 +1,6 @@
 import math
 import unittest
-from JsonhPy import JsonhReader, JsonhReaderOptions, JsonhVersion, JsonhResult, JsonhToken, JsonTokenType, JsonhNumberParser
+from src.JsonhPy.JsonhPy import JsonhReader, JsonhReaderOptions, JsonhVersion, JsonhResult, JsonhToken, JsonTokenType, JsonhNumberParser
 
 class JsonhPyTests(unittest.TestCase):
     # 
