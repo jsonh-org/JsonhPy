@@ -248,8 +248,16 @@ class JsonhNumberParser:
         if fraction.is_error:
             return fraction
 
+        # Get fraction leading zeroes
+        fraction_leading_zeroes: str = ""
+        for index in range(0, len(fractional_part)):
+            if fractional_part[index] == '0':
+                fraction_leading_zeroes += '0'
+            else:
+                break
+
         # Combine whole and fraction
-        return JsonhResult.from_value(float(str(whole.value()) + "." + str(fraction.value())))
+        return JsonhResult.from_value(float(str(whole.value()) + "." + fraction_leading_zeroes + str(fraction.value())))
 
     @staticmethod
     def _parse_whole_number(digits: str, base_digits: str) -> JsonhResult[int, str]:

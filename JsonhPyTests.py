@@ -395,5 +395,12 @@ true: b
 
         self.assertDictEqual(JsonhReader.parse_element_from_string(jsonh3).value(), { "true": "b" })
 
+    def test_FractionLeadingZeroesTest(self):
+        jsonh: str = """
+0.04
+"""
+
+        self.assertEqual(JsonhReader.parse_element_from_string(jsonh).value(), 0.04)
+
 if __name__ == '__main__':
     unittest.main()
