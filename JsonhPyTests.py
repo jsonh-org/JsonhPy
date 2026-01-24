@@ -376,5 +376,24 @@ a /
 
         self.assertTrue(JsonhReader.parse_element_from_string(jsonh).is_error)
 
+    def test_FirstPropertyNameInBracelessObjectTest(self):
+        jsonh: str = """
+a: b
+"""
+
+        self.assertDictEqual(JsonhReader.parse_element_from_string(jsonh).value(), { "a": "b" })
+
+        jsonh2: str = """
+0: b
+"""
+
+        self.assertDictEqual(JsonhReader.parse_element_from_string(jsonh2).value(), { "0": "b" })
+
+        jsonh3: str = """
+true: b
+"""
+
+        self.assertDictEqual(JsonhReader.parse_element_from_string(jsonh3).value(), { "true": "b" })
+
 if __name__ == '__main__':
     unittest.main()

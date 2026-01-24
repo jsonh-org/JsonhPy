@@ -619,15 +619,11 @@ class JsonhReader:
                 return
 
             # Detect braceless object from property name
-            if token.value().json_type == JsonTokenType.STRING:
-                for token2 in self._read_braceless_object_or_end_of_string(token.value()):
-                    if token2.is_error:
-                        yield token2
-                        return
+            for token2 in self._read_braceless_object_or_end_of_primitive(token.value()):
+                if token2.is_error:
                     yield token2
-            # Primitive value
-            else:
-                yield token
+                    return
+                yield token2
 
     def _read_object(self) -> Iterator[JsonhResult[JsonhToken, str]]:
         # Opening brace
@@ -704,27 +700,32 @@ class JsonhReader:
                     return
                 yield token
 
-    def _read_braceless_object_or_end_of_string(self, string_token: JsonhToken) -> Iterator[JsonhResult[JsonhToken, str]]:
+    def _read_braceless_object_or_end_of_primitive(self, primitive_token: JsonhToken) -> Iterator[JsonhResult[JsonhToken, str]]:
         # Comments & whitespace
-        property_name_tokens: list[JsonhToken] = []
+        property_name_tokens: list[JsonhToken] | None = None
         for comment_or_whitespace_token in self._read_comments_and_whitespace():
             if comment_or_whitespace_token.is_error:
                 yield comment_or_whitespace_token
                 return
+            if property_name_tokens == None:
+                property_name_tokens = []
             property_name_tokens.append(comment_or_whitespace_token.value())
         
-        # String
+        # Primitive
         if not self._read_one(':'):
-            # String
-            yield JsonhResult.from_value(string_token)
+            # Primitive
+            yield JsonhResult.from_value(primitive_token)
             # Comments & whitespace
-            for comment_or_whitespace_token in property_name_tokens:
-                yield JsonhResult.from_value(comment_or_whitespace_token)
-            # End of string
+            if property_name_tokens != None:
+                for comment_or_whitespace_token in property_name_tokens:
+                    yield JsonhResult.from_value(comment_or_whitespace_token)
+            # End of primitive
             return
 
         # Property name
-        property_name_tokens.append(JsonhToken(JsonTokenType.PROPERTY_NAME, string_token.value))
+        if property_name_tokens == None:
+            property_name_tokens = []
+        property_name_tokens.append(JsonhToken(JsonTokenType.PROPERTY_NAME, primitive_token.value))
 
         # Braceless object
         for object_token in self._read_braceless_object(property_name_tokens):
@@ -1055,11 +1056,11 @@ class JsonhReader:
         if is_named_literal_possible:
             match string_builder:
                 case "null":
-                    return JsonhResult.from_value(JsonhToken(JsonTokenType.NULL))
+                    return JsonhResult.from_value(JsonhToken(JsonTokenType.NULL, "null"))
                 case "true":
-                    return JsonhResult.from_value(JsonhToken(JsonTokenType.TRUE))
+                    return JsonhResult.from_value(JsonhToken(JsonTokenType.TRUE, "true"))
                 case "false":
-                    return JsonhResult.from_value(JsonhToken(JsonTokenType.FALSE))
+                    return JsonhResult.from_value(JsonhToken(JsonTokenType.FALSE, "false"))
 
         # End of quoteless string
         return JsonhResult.from_value(JsonhToken(JsonTokenType.STRING, string_builder))
