@@ -430,5 +430,12 @@ true: b
 
         self.assertEqual(JsonhReader.parse_element_from_string(jsonh).value(), 0)
 
+    def test_UnderscoreBesideDotTest(self):
+        jsonh: str = """
+[0_.0, 0._0]
+"""
+
+        self.assertEqual(JsonhReader.parse_element_from_string(jsonh).value(), ["0_.0", "0._0"])
+
 if __name__ == '__main__':
     unittest.main()

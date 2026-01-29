@@ -1262,6 +1262,10 @@ class JsonhReader:
                 is_empty = False
             # Dot
             elif next == '.':
+                # Disallow dot preceding underscore
+                if len(number_builder.ref) >= 1 and number_builder.ref[-1] == '_':
+                    return JsonhResult.from_error("`.` must not follow `_` in number")
+
                 self._read()
                 number_builder.ref += next
                 is_empty = False
@@ -1272,6 +1276,10 @@ class JsonhReader:
                 is_fraction = True
             # Underscore
             elif next == '_':
+                # Disallow underscore following dot
+                if len(number_builder.ref) >= 1 and number_builder.ref[-1] == '.':
+                    return JsonhResult.from_error("`_` must not follow `.` in number")
+
                 self._read()
                 number_builder.ref += next
                 is_empty = False
