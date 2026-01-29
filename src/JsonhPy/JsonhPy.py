@@ -312,6 +312,17 @@ class JsonhReaderOptions:
     """
     Specifies the major version of the JSONH specification to use.
     """
+    parse_single_element: bool = False
+    """
+    Enables/disables checks for exactly one element when parsing.
+    
+    ```
+    "cat"
+    "dog" // Error: Expected single element
+    ```
+    
+    This option does not apply when reading elements, only when parsing elements.
+    """
     incomplete_inputs: bool = False
     """
     Enables/disables parsing unclosed inputs.
@@ -324,17 +335,6 @@ class JsonhReaderOptions:
     This is potentially useful for large language models that stream responses.
     
     Only some tokens can be incomplete in this mode, so it should not be relied upon.
-    """
-    parse_single_element: bool = False
-    """
-    Enables/disables checks for exactly one element when parsing.
-    
-    ```
-    "cat"
-    "dog" // Error: Expected single element
-    ```
-    
-    This option does not apply when reading elements, only when parsing elements.
     """
 
     def __init__(self, version: JsonhVersion = JsonhVersion.LATEST, incomplete_inputs: bool = False, parse_single_element: bool = False):
