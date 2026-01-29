@@ -402,5 +402,26 @@ true: b
 
         self.assertEqual(JsonhReader.parse_element_from_string(jsonh).value(), 0.04)
 
+    def test_MaxDepthTest(self):
+        jsonh: str = """
+{
+  a: {
+    b: {
+      c: ""
+    }
+    d: {
+    }
+  }
+}
+"""
+
+        self.assertTrue(JsonhReader.parse_element_from_string(jsonh, JsonhReaderOptions(
+            max_depth = 2,
+        )).is_error)
+
+        self.assertFalse(JsonhReader.parse_element_from_string(jsonh, JsonhReaderOptions(
+            max_depth = 3,
+        )).is_error)
+
 if __name__ == '__main__':
     unittest.main()

@@ -323,6 +323,23 @@ class JsonhReaderOptions:
     
     This option does not apply when reading elements, only when parsing elements.
     """
+    max_depth: int = 64
+    """
+    Sets the maximum recursion depth allowed when reading JSONH.
+    
+    ```
+    // Max depth: 2
+    {
+      a: {
+        b: {
+          // Error: Exceeded max depth
+        }
+      }
+    }
+    ```
+
+    The default value is 64 to defend against DOS attacks.
+    """
     incomplete_inputs: bool = False
     """
     Enables/disables parsing unclosed inputs.
@@ -337,13 +354,14 @@ class JsonhReaderOptions:
     Only some tokens can be incomplete in this mode, so it should not be relied upon.
     """
 
-    def __init__(self, version: JsonhVersion = JsonhVersion.LATEST, incomplete_inputs: bool = False, parse_single_element: bool = False):
+    def __init__(self, version: JsonhVersion = JsonhVersion.LATEST, parse_single_element: bool = False, max_depth: int = 64, incomplete_inputs: bool = False):
         """
         Constructs options for a JsonhReader.
         """
         self.version = version
-        self.incomplete_inputs = incomplete_inputs
         self.parse_single_element = parse_single_element
+        self.max_depth = max_depth
+        self.incomplete_inputs = incomplete_inputs
 
     def supports_version(self, minimum_version: JsonhVersion) -> bool:
         """
@@ -373,6 +391,10 @@ class JsonhReader:
     char_counter: int
     """
     The number of characters read from the string.
+    """
+    depth: int
+    """
+    The current recursion depth of the reader.
     """
 
     def _RESERVED_CHARS(self):
@@ -410,6 +432,7 @@ class JsonhReader:
         self.index = 0
         self.options = options
         self.char_counter = 0
+        self.depth = 0
 
     @staticmethod
     def parse_element_from_string(string: str, options: JsonhReaderOptions = JsonhReaderOptions()) -> JsonhResult[object, str]:
@@ -642,8 +665,14 @@ class JsonhReader:
                     yield token
                     return
                 yield token
-        # Start object
+        # Start of object
         yield JsonhResult.from_value(JsonhToken(JsonTokenType.START_OBJECT))
+        self.depth += 1
+
+        # Check exceeded max depth
+        if self.depth > self.options.max_depth:
+            yield JsonhResult.from_error("Exceeded max depth")
+            return
 
         while True:
             # Comments & whitespace
@@ -657,6 +686,7 @@ class JsonhReader:
             if next == None:
                 # End of incomplete object
                 if self.options.incomplete_inputs:
+                    self.depth -= 1
                     yield JsonhResult.from_value(JsonhToken(JsonTokenType.END_OBJECT))
                     return
                 # Missing closing brace
@@ -666,6 +696,7 @@ class JsonhReader:
             if next == '}':
                 # End of object
                 self._read()
+                self.depth -= 1
                 yield JsonhResult.from_value(JsonhToken(JsonTokenType.END_OBJECT))
                 return
             # Property
@@ -679,6 +710,12 @@ class JsonhReader:
     def _read_braceless_object(self, property_name_tokens: Iterable[JsonhToken] | None = None) -> Iterator[JsonhResult[JsonhToken, str]]:
         # Start of object
         yield JsonhResult.from_value(JsonhToken(JsonTokenType.START_OBJECT))
+        self.depth += 1
+
+        # Check exceeded max depth
+        if self.depth > self.options.max_depth:
+            yield JsonhResult.from_error("Exceeded max depth")
+            return
 
         # Initial tokens
         if property_name_tokens != None:
@@ -698,6 +735,7 @@ class JsonhReader:
             
             if self._peek() == None:
                 # End of braceless object
+                self.depth -= 1
                 yield JsonhResult.from_value(JsonhToken(JsonTokenType.END_OBJECT))
                 return
             
@@ -808,6 +846,12 @@ class JsonhReader:
             return
         # Start of array
         yield JsonhResult.from_value(JsonhToken(JsonTokenType.START_ARRAY))
+        self.depth += 1
+
+        # Check exceeded max depth
+        if self.depth > self.options.max_depth:
+            yield JsonhResult.from_error("Exceeded max depth")
+            return
 
         while True:
             # Comments & whitespace
@@ -821,6 +865,7 @@ class JsonhReader:
             if next == None:
                 # End of incomplete array
                 if self.options.incomplete_inputs:
+                    self.depth -= 1
                     yield JsonhResult.from_value(JsonhToken(JsonTokenType.END_ARRAY))
                     return
                 # Missing closing bracket
@@ -831,6 +876,7 @@ class JsonhReader:
             if next == ']':
                 # End of array
                 self._read()
+                self.depth -= 1
                 yield JsonhResult.from_value(JsonhToken(JsonTokenType.END_ARRAY))
                 return
             # Item
