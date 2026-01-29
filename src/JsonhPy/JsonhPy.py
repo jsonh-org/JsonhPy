@@ -1239,7 +1239,7 @@ class JsonhReader:
 
     def _read_number_no_exponent(self, number_builder: JsonhRef[str], base_digits: str, has_base_specifier: bool = False, has_leading_zero: bool = False) -> JsonhResult[None, None]:
         # Leading underscore
-        if (not has_base_specifier) and self._peek() == '_':
+        if (not has_base_specifier) and not (has_leading_zero) and self._peek() == '_':
             return JsonhResult.from_error("Leading `_` in number")
 
         is_fraction: bool = False

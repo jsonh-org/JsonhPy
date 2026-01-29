@@ -423,5 +423,12 @@ true: b
             max_depth = 3,
         )).is_error)
 
+    def test_UnderscoreAfterLeadingZeroTest(self):
+        jsonh: str = """
+0_0
+"""
+
+        self.assertEqual(JsonhReader.parse_element_from_string(jsonh).value(), 0)
+
 if __name__ == '__main__':
     unittest.main()
