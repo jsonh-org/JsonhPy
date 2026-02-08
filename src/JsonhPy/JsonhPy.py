@@ -541,10 +541,11 @@ class JsonhReader:
         next_element = parse_next_element()
 
         # Ensure exactly one element
-        if self.options.parse_single_element:
-            for token in self.read_end_of_elements():
-                if token.is_error:
-                    return JsonhResult.from_error(token.error())
+        if not next_element.is_error:
+            if self.options.parse_single_element:
+                for token in self.read_end_of_elements():
+                    if token.is_error:
+                        return JsonhResult.from_error(token.error())
 
         return next_element
 
