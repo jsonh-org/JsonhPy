@@ -54,5 +54,5 @@ jsonh: str = """
     this is: awesome
 }
 """
-json: str = JsonhReader.parse_element_from_string(jsonh).value()
+json: object = JsonhReader.parse_element_from_string(jsonh).value()
 ```
