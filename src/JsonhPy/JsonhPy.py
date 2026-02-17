@@ -1462,10 +1462,14 @@ class JsonhReader:
         # Return aggregated value
         return JsonhResult.from_value(value)
 
-    def _read_escape_sequence(self) -> JsonhResult[str, str]:
+    def _read_escape_sequence(self, high_surrogate: int | None = None) -> JsonhResult[str, str]:
         escape_char: str | None = self._read()
         if escape_char == None:
             return JsonhResult.from_error("Expected escape sequence, got end of input")
+
+        # Ensure high surrogates are completed
+        if high_surrogate != None and escape_char not in ['u', 'x', 'U']:
+            return JsonhResult.from_error("Expected low surrogate after high surrogate")
 
         match escape_char:
             # Reverse solidus
@@ -1500,13 +1504,13 @@ class JsonhReader:
                 return JsonhResult.from_value('\u001b')
             # Unicode hex sequence
             case 'u':
-                return self._read_hex_escape_sequence(4)
+                return self._read_hex_escape_sequence(4, high_surrogate)
             # Short unicode hex sequence
             case 'x':
-                return self._read_hex_escape_sequence(2)
+                return self._read_hex_escape_sequence(2, high_surrogate)
             # Long unicode hex sequence
             case 'U':
-                return self._read_hex_escape_sequence(8)
+                return self._read_hex_escape_sequence(8, high_surrogate)
             # Escaped newline
             case self._NEWLINE_CHARS:
                 # Join CR LF
@@ -1517,50 +1521,42 @@ class JsonhReader:
             case _:
                 return JsonhResult.from_value(escape_char)
 
-    def _read_hex_escape_sequence(self, length: int) -> JsonhResult[str, str]:
-        # This method is used to combine escaped UTF-16 surrogate pairs (e.g. "\uD83D\uDC7D" -> "👽")
-
-        # Read hex digits & convert to uint
+    def _read_hex_escape_sequence(self, length: int, high_surrogate: int | None) -> JsonhResult[str, str]:
         code_point: JsonhResult[int, str] = self._read_hex_sequence(length)
         if code_point.is_error:
             return JsonhResult.from_error(code_point.error())
 
-        # High surrogate
-        if (self._is_utf16_high_surrogate(code_point.value())):
-            original_position: int = self.index
-            # Escape sequence
-            if self._read_one('\\'):
-                next: str | None = self._read_any('u', 'x', 'U')
-                # Low surrogate escape sequence
-                if next:
-                    # Read hex sequence
-                    low_code_point: JsonhResult[int, str]
-                    match next:
-                        case 'u':
-                            low_code_point = self._read_hex_sequence(4)
-                        case 'x':
-                            low_code_point = self._read_hex_sequence(2)
-                        case 'U':
-                            low_code_point = self._read_hex_sequence(8)
-                    # Ensure hex sequence read successfully
-                    if low_code_point.is_error:
-                        return JsonhResult.from_error(low_code_point.error())
-                    # Combine high and low surrogates
-                    code_point.value_or_none = self._utf16_surrogates_to_code_point(code_point.value(), low_code_point.value())
-                # Other escape sequence
-                else:
-                    self.index = original_position
-
-        # Rune
-        return JsonhResult.from_value(chr(code_point.value()))
+        # Low surrogate
+        if high_surrogate != None:
+            combined: JsonhResult[int, str] = self._utf16_surrogates_to_code_point(high_surrogate, code_point.value())
+            if combined.is_error:
+                return JsonhResult.from_error(combined.error())
+            return JsonhResult.from_value(chr(combined.value()))
+        else:
+            # High surrogate followed by low surrogate
+            if self._is_utf16_high_surrogate(code_point.value()) and self._read_one('\\'):
+                return self._read_escape_sequence(code_point.value())
+            # Standalone character
+            else:
+                return JsonhResult.from_value(chr(code_point.value()))
 
     @staticmethod
-    def _utf16_surrogates_to_code_point(high_surrogate: int, low_surrogate: int) -> int:
-        return 0x10000 + (((high_surrogate - 0xD800) << 10) | (low_surrogate - 0xDC00))
+    def _utf16_surrogates_to_code_point(high_surrogate: int, low_surrogate: int) -> JsonhResult[int, str]:
+        if not JsonhReader._is_utf16_high_surrogate(high_surrogate):
+            return JsonhResult.from_error("High surrogate out of range")
+
+        if not JsonhReader._is_utf16_low_surrogate(low_surrogate):
+            return JsonhResult.from_error("Low surrogate out of range")
+
+        return JsonhResult.from_value(0x10000 + (((high_surrogate - 0xD800) << 10) | (low_surrogate - 0xDC00)))
 
     @staticmethod
     def _is_utf16_high_surrogate(code_point: int) -> bool:
         return code_point >= 0xD800 and code_point <= 0xDBFF
+
+    @staticmethod
+    def _is_utf16_low_surrogate(code_point: int) -> bool:
+        return code_point >= 0xDC00 and code_point <= 0xDFFF
 
     def _peek(self) -> str | None:
         if self.index >= len(self.string):
