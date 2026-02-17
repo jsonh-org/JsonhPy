@@ -1437,20 +1437,30 @@ class JsonhReader:
                 return
 
     def _read_hex_sequence(self, length: int) -> JsonhResult[int, str]:
-        hex_chars: str = ""
+        assert(length <= 8)
 
-        for index in range(0, length):
+        value: int = 0
+
+        for _ in range(0, length):
             next: str | None = self._read()
 
             # Hex digit
             if next != None and ((ord('0') <= ord(next) <= ord('9')) or (ord('A') <= ord(next) <= ord('F')) or (ord('a') <= ord(next) <= ord('f'))):
-                hex_chars += next
+                # Get hex digit
+                digit: int = ord(next)
+                # Convert hex digit to integer
+                integer: int = \
+                    digit - ord('A') + 10 if (digit >= ord('A') and digit <= ord('F')) else \
+                    digit - ord('a') + 10 if (digit >= ord('a') and digit <= ord('f')) else \
+                    digit - ord('0')
+                # Aggregate digit into value
+                value = (value * 16) + integer
             # Unexpected char
             else:
                 return JsonhResult.from_error("Incorrect number of hexadecimal digits in unicode escape sequence")
 
-        # Parse unicode character from hex digits
-        return JsonhResult.from_value(int(hex_chars, base=16))
+        # Return aggregated value
+        return JsonhResult.from_value(value)
 
     def _read_escape_sequence(self) -> JsonhResult[str, str]:
         escape_char: str | None = self._read()
