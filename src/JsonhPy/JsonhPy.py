@@ -1263,7 +1263,7 @@ class JsonhReader:
                 is_empty = False
             # Dot
             elif next == '.':
-                # Disallow dot preceding underscore
+                # Disallow dot following underscore
                 if len(number_builder.ref) >= 1 and number_builder.ref[-1] == '_':
                     return JsonhResult.from_error("`.` must not follow `_` in number")
 
