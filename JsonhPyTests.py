@@ -404,13 +404,18 @@ true: b
 
     def test_BigNumbersTest(self):
         jsonh: str = """
-[3.5, 1e99999]
+[
+    3.5,
+    1e99999,
+    999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999
+]
 """
         element: list[float] = JsonhReader.parse_element_from_string(jsonh).value()
 
-        self.assertEqual(len(element), 2)
+        self.assertEqual(len(element), 3)
         self.assertEqual(element[0], 3.5)
         self.assertEqual(element[1], math.inf)
+        self.assertEqual(element[2], math.inf)
 
     def test_MaxDepthTest(self):
         jsonh: str = """
