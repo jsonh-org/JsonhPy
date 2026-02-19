@@ -402,6 +402,16 @@ true: b
 
         self.assertEqual(JsonhReader.parse_element_from_string(jsonh).value(), 0.04)
 
+    def test_BigNumbersTest(self):
+        jsonh: str = """
+[3.5, 1e99999]
+"""
+        element: list[float] = JsonhReader.parse_element_from_string(jsonh).value()
+
+        self.assertEqual(len(element), 2)
+        self.assertEqual(element[0], 3.5)
+        self.assertEqual(element[1], math.inf)
+
     def test_MaxDepthTest(self):
         jsonh: str = """
 {

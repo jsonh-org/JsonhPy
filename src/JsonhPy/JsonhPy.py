@@ -1,3 +1,4 @@
+import math
 from enum import Enum
 from typing import Iterator, Iterable
 
@@ -223,7 +224,15 @@ class JsonhNumberParser:
             return exponent
 
         # Multiply mantissa by 10 ^ exponent
-        return JsonhResult.from_value(mantissa.value() * (10 ** exponent.value()))
+        try:
+            return JsonhResult.from_value(mantissa.value() * (10.0 ** exponent.value()))
+        except:
+            if mantissa.value() > 0:
+                return JsonhResult.from_value(math.inf)
+            elif mantissa.value() < 0:
+                return JsonhResult.from_value(-math.inf)
+            else:
+                return JsonhResult.from_value(0.0)
 
     @staticmethod
     def _parse_fractional_number(digits: str, base_digits: str) -> JsonhResult[float, str]:
