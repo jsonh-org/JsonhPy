@@ -238,26 +238,28 @@ class JsonhNumberParser:
 
         # Get parts of number
         whole_part: str = digits[:dot_index]
-        fractional_part: str = digits[(dot_index + 1):]
+        fraction_part: str = digits[(dot_index + 1):]
 
         # Parse parts of number
         whole: JsonhResult[int, str] = JsonhNumberParser._parse_whole_number(whole_part, base_digits)
         if whole.is_error:
             return whole
-        fraction: JsonhResult[int, str] = JsonhNumberParser._parse_whole_number(fractional_part, base_digits)
+        fraction: JsonhResult[int, str] = JsonhNumberParser._parse_whole_number(fraction_part, base_digits)
         if fraction.is_error:
             return fraction
 
         # Get fraction leading zeroes
         fraction_leading_zeroes: str = ""
-        for index in range(0, len(fractional_part)):
-            if fractional_part[index] == '0':
+        for index in range(0, len(fraction_part)):
+            if fraction_part[index] == '0':
                 fraction_leading_zeroes += '0'
             else:
                 break
 
         # Combine whole and fraction
-        return JsonhResult.from_value(float(str(whole.value()) + "." + fraction_leading_zeroes + str(fraction.value())))
+        whole_digits: str = str(whole.value())
+        fraction_digits: str = str(fraction.value())
+        return JsonhResult.from_value(float(whole_digits + "." + fraction_leading_zeroes + fraction_digits))
 
     @staticmethod
     def _parse_whole_number(digits: str, base_digits: str) -> JsonhResult[int, str]:
@@ -284,12 +286,8 @@ class JsonhNumberParser:
             if digit_int < 0:
                 return JsonhResult.from_error(f"Invalid digit: '{digit_char}'")
 
-            # Get magnitude of current digit column
-            column_number: int = len(digits) - 1 - index
-            column_magnitude: int = len(base_digits) ** column_number
-
             # Add value of column
-            integer += digit_int * column_magnitude
+            integer = (integer * len(base_digits)) + digit_int
 
         # Apply sign
         if sign != 1:
