@@ -253,22 +253,23 @@ class JsonhNumberParser:
         whole: JsonhResult[float, str] = JsonhNumberParser._parse_whole_number(whole_part, base_digits)
         if whole.is_error:
             return whole
-        fraction: JsonhResult[float, str] = JsonhNumberParser._parse_whole_number(fraction_part, base_digits)
-        if fraction.is_error:
-            return fraction
 
-        # Get fraction leading zeroes
-        fraction_leading_zeroes: str = ""
-        for index in range(0, len(fraction_part)):
-            if fraction_part[index] == '0':
-                fraction_leading_zeroes += '0'
-            else:
-                break
+        # Add each column of fraction digits
+        fraction: float = 0.0
+        for index in range(len(fraction_part) - 1, -1, -1):
+            # Get current digit
+            digit_char: str = fraction_part[index]
+            digit_int: int = base_digits.find(digit_char.lower())
+
+            # Ensure digit is valid
+            if digit_int < 0:
+                return JsonhResult.from_error(f"Invalid digit: '{digit_char}'")
+
+            # Add value of column
+            fraction = (fraction + digit_int) / len(base_digits)
 
         # Combine whole and fraction
-        whole_digits: str = str(int(whole.value()))
-        fraction_digits: str = str(int(fraction.value()))
-        return JsonhResult.from_value(float(whole_digits + "." + fraction_leading_zeroes + fraction_digits))
+        return JsonhResult.from_value(whole.value() + fraction)
 
     @staticmethod
     def _parse_whole_number(digits: str, base_digits: str) -> JsonhResult[float, str]:
