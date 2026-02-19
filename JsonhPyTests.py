@@ -447,5 +447,23 @@ true: b
 
         self.assertEqual(JsonhReader.parse_element_from_string(jsonh).value(), " a")
 
+    def test_JoinCrLfInMultiQuotedStringTest(self):
+        jsonh: str = " ''' \\r\\nHello\r\n ''' "
+
+        self.assertEqual(JsonhReader.parse_element_from_string(jsonh).value(), "Hello")
+
+    def test_MassiveNumbersTest(self):
+        jsonh: str = """
+[
+    0x999_999_999_999_999_999_999_999,
+    0x999_999_999_999_999_999_999_999.0,
+]
+"""
+
+        self.assertEqual(JsonhReader.parse_element_from_string(jsonh).value(), [
+            47_536_897_508_558_602_556_126_370_201.0,
+            47_536_897_508_558_602_556_126_370_201.0,
+        ])
+
 if __name__ == '__main__':
     unittest.main()

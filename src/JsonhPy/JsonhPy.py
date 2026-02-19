@@ -241,10 +241,10 @@ class JsonhNumberParser:
         fraction_part: str = digits[(dot_index + 1):]
 
         # Parse parts of number
-        whole: JsonhResult[int, str] = JsonhNumberParser._parse_whole_number(whole_part, base_digits)
+        whole: JsonhResult[float, str] = JsonhNumberParser._parse_whole_number(whole_part, base_digits)
         if whole.is_error:
             return whole
-        fraction: JsonhResult[int, str] = JsonhNumberParser._parse_whole_number(fraction_part, base_digits)
+        fraction: JsonhResult[float, str] = JsonhNumberParser._parse_whole_number(fraction_part, base_digits)
         if fraction.is_error:
             return fraction
 
@@ -257,12 +257,12 @@ class JsonhNumberParser:
                 break
 
         # Combine whole and fraction
-        whole_digits: str = str(whole.value())
-        fraction_digits: str = str(fraction.value())
+        whole_digits: str = str(int(whole.value()))
+        fraction_digits: str = str(int(fraction.value()))
         return JsonhResult.from_value(float(whole_digits + "." + fraction_leading_zeroes + fraction_digits))
 
     @staticmethod
-    def _parse_whole_number(digits: str, base_digits: str) -> JsonhResult[int, str]:
+    def _parse_whole_number(digits: str, base_digits: str) -> JsonhResult[float, str]:
         """
         Converts a whole number (e.g. `12345`) from the given base (e.g. `01234567`) to a base-10 integer.
         """
@@ -276,7 +276,7 @@ class JsonhNumberParser:
             digits = digits[1:]
 
         # Add each column of digits
-        integer: int = 0
+        integer: float = 0.0
         for index in range(0, len(digits)):
             # Get current digit
             digit_char: str = digits[index]
