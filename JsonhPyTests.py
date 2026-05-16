@@ -65,51 +65,6 @@ class JsonhPyTests(unittest.TestCase):
         self.assertTrue(reader.find_property_value("c"))
         self.assertEqual(reader.parse_element().value(), "3")
 
-    def test_ParseJsonTest(self):
-        jsonh: str = """
-{
-  // Hello /* test */ world
-  a: 'b'
-  "c": '''私'''
-  x: [a,b,c]
-  y: {}
-  z: 0.05e1
-}
-"""
-
-        reader: JsonhReader = JsonhReader(jsonh)
-        self.assertEqual(reader.parse_json().value(), '{"a":"b","c":"私","x":["a","b","c"],"y":{},"z":0.5}')
-
-        reader2: JsonhReader = JsonhReader(jsonh)
-        self.assertEqual(reader2.parse_json(include_comments=True).value(), '{/* Hello / * test * / world*/"a":"b","c":"私","x":["a","b","c"],"y":{},"z":0.5}')
-
-        reader3: JsonhReader = JsonhReader(jsonh)
-        self.assertEqual(reader3.parse_json(indent="  ").value(), '''{
-  "a": "b",
-  "c": "私",
-  "x": [
-    "a",
-    "b",
-    "c"
-  ],
-  "y": {},
-  "z": 0.5
-}''')
-
-        reader4: JsonhReader = JsonhReader(jsonh)
-        self.assertEqual(reader4.parse_json(include_comments=True, indent="  ").value(), '''{
-  /* Hello / * test * / world*/
-  "a": "b",
-  "c": "私",
-  "x": [
-    "a",
-    "b",
-    "c"
-  ],
-  "y": {},
-  "z": 0.5
-}''')
-
     # 
     # Parse Tests
     # 
@@ -240,6 +195,51 @@ c : d
         self.assertFalse(JsonhReader.parse_element_from_string(jsonh2, JsonhReaderOptions(
             parse_single_element = True,
         )).is_error)
+
+    def test_ParseJsonTest(self):
+        jsonh: str = """
+{
+  // Hello /* test */ world
+  a: 'b'
+  "c": '''私'''
+  x: [a,b,c]
+  y: {}
+  z: 0.05e1
+}
+"""
+
+        reader: JsonhReader = JsonhReader(jsonh)
+        self.assertEqual(reader.parse_json().value(), '{"a":"b","c":"私","x":["a","b","c"],"y":{},"z":0.5}')
+
+        reader2: JsonhReader = JsonhReader(jsonh)
+        self.assertEqual(reader2.parse_json(include_comments=True).value(), '{/* Hello / * test * / world*/"a":"b","c":"私","x":["a","b","c"],"y":{},"z":0.5}')
+
+        reader3: JsonhReader = JsonhReader(jsonh)
+        self.assertEqual(reader3.parse_json(indent="  ").value(), '''{
+  "a": "b",
+  "c": "私",
+  "x": [
+    "a",
+    "b",
+    "c"
+  ],
+  "y": {},
+  "z": 0.5
+}''')
+
+        reader4: JsonhReader = JsonhReader(jsonh)
+        self.assertEqual(reader4.parse_json(include_comments=True, indent="  ").value(), '''{
+  /* Hello / * test * / world*/
+  "a": "b",
+  "c": "私",
+  "x": [
+    "a",
+    "b",
+    "c"
+  ],
+  "y": {},
+  "z": 0.5
+}''')
 
     # 
     # Edge Case Tests
