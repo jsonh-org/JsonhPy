@@ -566,7 +566,7 @@ class JsonhReader:
 
         If `indent` is not null, the output is pretty-printed with the given indentation.
 
-        The result is not safe to embed in HTML.
+        Note: The result is **NOT** safe to embed in HTML. To safely embed in HTML, you need to escape characters like `<`, `>` and `&`.
         """
 
         def parse_next_element_as_json() -> JsonhResult[str, str]:
