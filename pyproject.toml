@@ -1,6 +1,6 @@
 [project]
 name = "JsonhPy"
-version = "2.4"
+version = "2.5"
 authors = [
   { name="Joyless", email="joyless.mod@gmail.com" },
 ]
