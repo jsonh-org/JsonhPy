@@ -241,6 +241,30 @@ c : d
   "z": 0.5
 }''')
 
+        jsonh2: str = '''
+1
+2
+'''
+
+        reader5 = JsonhReader(jsonh2, JsonhReaderOptions(
+            parse_single_element = False,
+        ))
+        self.assertEqual(reader5.parse_json().value(), "1")
+
+        reader6 = JsonhReader(jsonh2, JsonhReaderOptions(
+            parse_single_element = True,
+        ))
+        self.assertEqual(reader6.parse_json().is_error, True)
+
+        jsonh3 = '''
+    a: /*b*/ c
+    '''
+
+        reader7 = JsonhReader(jsonh3, JsonhReaderOptions(
+            parse_single_element = False,
+        ))
+        self.assertEqual(reader7.parse_json().value(), "{\"a\":\"c\"}")
+
     # 
     # Edge Case Tests
     # 

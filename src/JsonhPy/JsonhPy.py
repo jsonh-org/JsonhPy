@@ -547,7 +547,7 @@ class JsonhReader:
                     case _:
                         return JsonhResult.from_error("Token type not implemented")
 
-        next_element = parse_next_element()
+        next_element: JsonhResult[object, str] = parse_next_element()
 
         # Ensure exactly one element
         if not next_element.is_error:
@@ -569,120 +569,132 @@ class JsonhReader:
         The result is not safe to embed in HTML.
         """
 
-        current_depth: int = 0
-        isStartOfStructure: bool = True
-        is_property_value: bool = False
+        def parse_next_element_as_json() -> JsonhResult[str, str]:
+            current_depth: int = 0
+            isStartOfStructure: bool = True
+            is_property_value: bool = False
 
-        resultBuilder: str = ""
+            result_builder: str = ""
 
-        for token_result in self.read_element():
-            # Check error
-            if (token_result.is_error):
-                return JsonhResult.from_error(token_result.error())
-            token: JsonhToken = token_result.value()
+            for token_result in self.read_element():
+                # Check error
+                if (token_result.is_error):
+                    return JsonhResult.from_error(token_result.error())
+                token: JsonhToken = token_result.value()
 
-            # Add comments and indents
-            if not is_property_value:
-                # Add comma before property/item
-                if (token.json_type not in [JsonTokenType.NONE, JsonTokenType.COMMENT]) and (current_depth > 0) and (not isStartOfStructure):
-                    # Don't add trailing comma
-                    if token.json_type not in [JsonTokenType.END_OBJECT, JsonTokenType.END_ARRAY]:
-                        resultBuilder += ','
+                # Add comments and indents
+                if not is_property_value:
+                    # Add comma before property/item
+                    if (token.json_type not in [JsonTokenType.NONE, JsonTokenType.COMMENT]) and (current_depth > 0) and (not isStartOfStructure):
+                        # Don't add trailing comma
+                        if token.json_type not in [JsonTokenType.END_OBJECT, JsonTokenType.END_ARRAY]:
+                            result_builder += ','
 
-                # Apply indentation
-                if indent != None:
-                    # Don't indent inside empty structures
-                    if not (token.json_type in [JsonTokenType.END_OBJECT, JsonTokenType.END_ARRAY] and isStartOfStructure):
-                        # Don't indent comment if not included
-                        if (not (token.json_type == JsonTokenType.COMMENT and (not include_comments))):
-                            # Don't indent root elements
-                            if current_depth > 0:
-                                # Add newline before element
-                                resultBuilder += '\n'
-
-                                # Get current indent count
-                                indent_count: int = current_depth
-                                if token.json_type in [JsonTokenType.END_OBJECT, JsonTokenType.END_ARRAY]:
-                                    indent_count -= 1
-
-                                # Add indent
-                                for _ in range(0, indent_count):
-                                    resultBuilder += indent
-            # Track start of structure to avoid adding leading comma
-            if token.json_type not in [JsonTokenType.NONE, JsonTokenType.COMMENT]:
-                isStartOfStructure = False
-            if token.json_type in [JsonTokenType.START_OBJECT, JsonTokenType.START_ARRAY]:
-                isStartOfStructure = True
-
-            match token.json_type:
-                # Null
-                case JsonTokenType.NONE:
-                    resultBuilder += "null"
-                    if current_depth == 0:
-                        return JsonhResult.from_value(resultBuilder)
-                # True
-                case JsonTokenType.TRUE:
-                    resultBuilder += "true"
-                    if current_depth == 0:
-                        return JsonhResult.from_value(resultBuilder)
-                # False
-                case JsonTokenType.FALSE:
-                    resultBuilder += "false"
-                    if current_depth == 0:
-                        return JsonhResult.from_value(resultBuilder)
-                # String
-                case JsonTokenType.STRING:
-                    resultBuilder += json.dumps(token.value, ensure_ascii=False)
-                    if current_depth == 0:
-                        return JsonhResult.from_value(resultBuilder)
-                # Number
-                case JsonTokenType.NUMBER:
-                    result: JsonhResult[float] = JsonhNumberParser.parse(token_result.value().value)
-                    if (result.is_error):
-                        return JsonhResult.from_error(result.error())
-                    resultBuilder += str(result.value())
-                    if current_depth == 0:
-                        return JsonhResult.from_value(resultBuilder)
-                # Start Object
-                case JsonTokenType.START_OBJECT:
-                    resultBuilder += '{'
-                    current_depth += 1
-                # Start Array
-                case JsonTokenType.START_ARRAY:
-                    resultBuilder += '['
-                    current_depth += 1
-                # End Object
-                case JsonTokenType.END_OBJECT:
-                    resultBuilder += '}'
-                    current_depth -= 1
-                    if current_depth == 0:
-                        return JsonhResult.from_value(resultBuilder)
-                # End Array
-                case JsonTokenType.END_ARRAY:
-                    resultBuilder += ']'
-                    current_depth -= 1
-                    if current_depth == 0:
-                        return JsonhResult.from_value(resultBuilder)
-                # Property Name
-                case JsonTokenType.PROPERTY_NAME:
-                    resultBuilder += json.dumps(token.value, ensure_ascii=False)
-                    resultBuilder += ':'
+                    # Apply indentation
                     if indent != None:
-                        resultBuilder += ' '
-                # Comment
-                case JsonTokenType.COMMENT:
-                    if (include_comments):
-                        resultBuilder += "/*"
-                        resultBuilder += token.value.replace("/*", "/ *").replace("*/", "* /")
-                        resultBuilder += "*/"
-                # Not implemented
-                case _:
-                    return JsonhResult.from_error("Token type not implemented")
+                        # Don't indent inside empty structures
+                        if not (token.json_type in [JsonTokenType.END_OBJECT, JsonTokenType.END_ARRAY] and isStartOfStructure):
+                            # Don't indent comment if not included
+                            if (not (token.json_type == JsonTokenType.COMMENT and (not include_comments))):
+                                # Don't indent root elements
+                                if current_depth > 0:
+                                    # Add newline before element
+                                    result_builder += '\n'
 
-            is_property_value = token.json_type == JsonTokenType.PROPERTY_NAME
+                                    # Get current indent count
+                                    indent_count: int = current_depth
+                                    if token.json_type in [JsonTokenType.END_OBJECT, JsonTokenType.END_ARRAY]:
+                                        indent_count -= 1
 
-        # End of input
-        return JsonhResult.from_error("Expected token, got end of input")
+                                    # Add indent
+                                    for _ in range(0, indent_count):
+                                        result_builder += indent
+                # Track start of structure to avoid adding leading comma
+                if token.json_type not in [JsonTokenType.NONE, JsonTokenType.COMMENT]:
+                    isStartOfStructure = False
+                if token.json_type in [JsonTokenType.START_OBJECT, JsonTokenType.START_ARRAY]:
+                    isStartOfStructure = True
+
+                match token.json_type:
+                    # Null
+                    case JsonTokenType.NONE:
+                        result_builder += "null"
+                        if current_depth == 0:
+                            return JsonhResult.from_value(result_builder)
+                    # True
+                    case JsonTokenType.TRUE:
+                        result_builder += "true"
+                        if current_depth == 0:
+                            return JsonhResult.from_value(result_builder)
+                    # False
+                    case JsonTokenType.FALSE:
+                        result_builder += "false"
+                        if current_depth == 0:
+                            return JsonhResult.from_value(result_builder)
+                    # String
+                    case JsonTokenType.STRING:
+                        result_builder += json.dumps(token.value, ensure_ascii=False)
+                        if current_depth == 0:
+                            return JsonhResult.from_value(result_builder)
+                    # Number
+                    case JsonTokenType.NUMBER:
+                        result: JsonhResult[float] = JsonhNumberParser.parse(token_result.value().value)
+                        if (result.is_error):
+                            return JsonhResult.from_error(result.error())
+                        result_builder += str(result.value()).removesuffix(".0")
+                        if current_depth == 0:
+                            return JsonhResult.from_value(result_builder)
+                    # Start Object
+                    case JsonTokenType.START_OBJECT:
+                        result_builder += '{'
+                        current_depth += 1
+                    # Start Array
+                    case JsonTokenType.START_ARRAY:
+                        result_builder += '['
+                        current_depth += 1
+                    # End Object
+                    case JsonTokenType.END_OBJECT:
+                        result_builder += '}'
+                        current_depth -= 1
+                        if current_depth == 0:
+                            return JsonhResult.from_value(result_builder)
+                    # End Array
+                    case JsonTokenType.END_ARRAY:
+                        result_builder += ']'
+                        current_depth -= 1
+                        if current_depth == 0:
+                            return JsonhResult.from_value(result_builder)
+                    # Property Name
+                    case JsonTokenType.PROPERTY_NAME:
+                        result_builder += json.dumps(token.value, ensure_ascii=False)
+                        result_builder += ':'
+                        if indent != None:
+                            result_builder += ' '
+                    # Comment
+                    case JsonTokenType.COMMENT:
+                        if (include_comments):
+                            result_builder += "/*"
+                            result_builder += token.value.replace("/*", "/ *").replace("*/", "* /")
+                            result_builder += "*/"
+                    # Not implemented
+                    case _:
+                        return JsonhResult.from_error("Token type not implemented")
+
+                is_property_value = token.json_type == JsonTokenType.PROPERTY_NAME
+
+            # End of input
+            return JsonhResult.from_error("Expected token, got end of input")
+
+        next_element_as_json: JsonhResult[str, str] = parse_next_element_as_json()
+
+        # Ensure exactly one element
+        if not next_element_as_json.is_error:
+            if self.options.parse_single_element:
+                for token in self.read_end_of_elements():
+                    if token.is_error:
+                        return JsonhResult.from_error(token.error())
+
+        return next_element_as_json
 
     def find_property_value(self, property_name: str) -> bool:
         """
