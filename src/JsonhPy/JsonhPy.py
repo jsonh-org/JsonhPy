@@ -680,7 +680,8 @@ class JsonhReader:
                     case _:
                         return JsonhResult.from_error("Token type not implemented")
 
-                is_property_value = token.json_type == JsonTokenType.PROPERTY_NAME
+                if token.json_type != JsonTokenType.COMMENT:
+                    is_property_value = token.json_type == JsonTokenType.PROPERTY_NAME
 
             # End of input
             return JsonhResult.from_error("Expected token, got end of input")
