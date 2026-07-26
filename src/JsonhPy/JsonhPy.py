@@ -840,6 +840,7 @@ class JsonhReader:
                     return
                 # Missing closing brace
                 yield JsonhResult.from_error("Expected `}` to end object, got end of input")
+                return
 
             # Closing brace
             if next == '}':
