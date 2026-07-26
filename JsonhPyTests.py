@@ -247,21 +247,21 @@ c : d
 2
 '''
 
-        reader5 = JsonhReader(jsonh2, JsonhReaderOptions(
+        reader5: JsonhReader = JsonhReader(jsonh2, JsonhReaderOptions(
             parse_single_element = False,
         ))
         self.assertEqual(reader5.parse_json().value(), "1")
 
-        reader6 = JsonhReader(jsonh2, JsonhReaderOptions(
+        reader6: JsonhReader = JsonhReader(jsonh2, JsonhReaderOptions(
             parse_single_element = True,
         ))
-        self.assertEqual(reader6.parse_json().is_error, True)
+        self.assertTrue(reader6.parse_json().is_error)
 
-        jsonh3 = '''
+        jsonh3: str = '''
     a: /*b*/ c
     '''
 
-        reader7 = JsonhReader(jsonh3, JsonhReaderOptions(
+        reader7: JsonhReader = JsonhReader(jsonh3, JsonhReaderOptions(
             parse_single_element = False,
         ))
         self.assertEqual(reader7.parse_json().value(), "{\"a\":\"c\"}")
