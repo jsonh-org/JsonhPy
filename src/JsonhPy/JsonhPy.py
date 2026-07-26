@@ -754,7 +754,7 @@ class JsonhReader:
         # Peek char
         return self._peek() != None
 
-    def read_end_of_elements(self) -> Iterator[JsonhResult]:
+    def read_end_of_elements(self) -> Iterator[JsonhResult[JsonhToken, str]]:
         """
         Reads comments and whitespace and errors if the reader contains another element.
         """
