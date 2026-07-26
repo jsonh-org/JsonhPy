@@ -8,7 +8,7 @@ class JsonhResult[T, E]:
     value_or_none: T | None
     error_or_none: E | None
 
-    def __init__(self, is_error: bool, value_or_none: T | None = None, error_or_none: E | None = None):
+    def __init__(self, is_error: bool, value_or_none: T | None = None, error_or_none: E | None = None) -> None:
         self.is_error = is_error
         self.value_or_none = value_or_none
         self.error_or_none = error_or_none
@@ -39,7 +39,7 @@ class JsonhResult[T, E]:
 class JsonhRef[T]:
     ref: T
 
-    def __init__(self, ref: T):
+    def __init__(self, ref: T) -> None:
         self.ref = ref
 
 class JsonhVersion(Enum):
@@ -135,10 +135,13 @@ class JsonTokenType(Enum):
     """
 
 class JsonhToken:
+    """
+    A single JSONH token.
+    """
     json_type: JsonTokenType
     value: str
 
-    def __init__(self, json_type: JsonTokenType, value: str = ""):
+    def __init__(self, json_type: JsonTokenType, value: str = "") -> None:
         self.json_type = json_type
         self.value = value
 
@@ -306,7 +309,7 @@ class JsonhNumberParser:
         return JsonhResult.from_value(integer)
 
     @staticmethod
-    def _index_of_any(input: str, chars: Iterable[str]) -> float:
+    def _index_of_any(input: str, chars: Iterable[str]) -> int:
         for i in range(0, len(input)):
             char: str = input[i]
             if char in chars:
@@ -363,7 +366,7 @@ class JsonhReaderOptions:
     Only some tokens can be incomplete in this mode, so it should not be relied upon.
     """
 
-    def __init__(self, version: JsonhVersion = JsonhVersion.LATEST, parse_single_element: bool = False, max_depth: int = 64, incomplete_inputs: bool = False):
+    def __init__(self, version: JsonhVersion = JsonhVersion.LATEST, parse_single_element: bool = False, max_depth: int = 64, incomplete_inputs: bool = False) -> None:
         """
         Constructs options for a JsonhReader.
         """
@@ -385,6 +388,9 @@ class JsonhReaderOptions:
         return options_version.value >= given_version.value
 
 class JsonhReader:
+    """
+    A reader that reads JSONH tokens from a `str`.
+    """
     string: str
     """
     The string to read characters from.
@@ -515,7 +521,7 @@ class JsonhReader:
                             return JsonhResult.from_value(element)
                     # Number
                     case JsonTokenType.NUMBER:
-                        result: JsonhResult[float] = JsonhNumberParser.parse(token_result.value().value)
+                        result: JsonhResult[float, str] = JsonhNumberParser.parse(token_result.value().value)
                         if result.is_error:
                             return JsonhResult.from_error(result.error())
                         element: float = result.value()
@@ -547,6 +553,9 @@ class JsonhReader:
                     case _:
                         return JsonhResult.from_error("Token type not implemented")
 
+            # End of input
+            return JsonhResult.from_error("Expected token, got end of input")
+
         next_element: JsonhResult[object, str] = parse_next_element()
 
         # Ensure exactly one element
@@ -571,21 +580,21 @@ class JsonhReader:
 
         def parse_next_element_as_json() -> JsonhResult[str, str]:
             current_depth: int = 0
-            isStartOfStructure: bool = True
+            is_start_of_structure: bool = True
             is_property_value: bool = False
 
             result_builder: str = ""
 
             for token_result in self.read_element():
                 # Check error
-                if (token_result.is_error):
+                if token_result.is_error:
                     return JsonhResult.from_error(token_result.error())
                 token: JsonhToken = token_result.value()
 
                 # Add comments and indents
                 if not is_property_value:
                     # Add comma before property/item
-                    if (token.json_type not in [JsonTokenType.NONE, JsonTokenType.COMMENT]) and (current_depth > 0) and (not isStartOfStructure):
+                    if (token.json_type not in [JsonTokenType.NONE, JsonTokenType.COMMENT]) and (current_depth > 0) and (not is_start_of_structure):
                         # Don't add trailing comma
                         if token.json_type not in [JsonTokenType.END_OBJECT, JsonTokenType.END_ARRAY]:
                             result_builder += ','
@@ -593,9 +602,9 @@ class JsonhReader:
                     # Apply indentation
                     if indent != None:
                         # Don't indent inside empty structures
-                        if not (token.json_type in [JsonTokenType.END_OBJECT, JsonTokenType.END_ARRAY] and isStartOfStructure):
+                        if not (token.json_type in [JsonTokenType.END_OBJECT, JsonTokenType.END_ARRAY] and is_start_of_structure):
                             # Don't indent comment if not included
-                            if (not (token.json_type == JsonTokenType.COMMENT and (not include_comments))):
+                            if not (token.json_type == JsonTokenType.COMMENT and (not include_comments)):
                                 # Don't indent root elements
                                 if current_depth > 0:
                                     # Add newline before element
@@ -611,9 +620,9 @@ class JsonhReader:
                                         result_builder += indent
                 # Track start of structure to avoid adding leading comma
                 if token.json_type not in [JsonTokenType.NONE, JsonTokenType.COMMENT]:
-                    isStartOfStructure = False
+                    is_start_of_structure = False
                 if token.json_type in [JsonTokenType.START_OBJECT, JsonTokenType.START_ARRAY]:
-                    isStartOfStructure = True
+                    is_start_of_structure = True
 
                 match token.json_type:
                     # Null
@@ -638,8 +647,8 @@ class JsonhReader:
                             return JsonhResult.from_value(result_builder)
                     # Number
                     case JsonTokenType.NUMBER:
-                        result: JsonhResult[float] = JsonhNumberParser.parse(token_result.value().value)
-                        if (result.is_error):
+                        result: JsonhResult[float, str] = JsonhNumberParser.parse(token_result.value().value)
+                        if result.is_error:
                             return JsonhResult.from_error(result.error())
                         result_builder += str(result.value()).removesuffix(".0")
                         if current_depth == 0:
@@ -672,7 +681,7 @@ class JsonhReader:
                             result_builder += ' '
                     # Comment
                     case JsonTokenType.COMMENT:
-                        if (include_comments):
+                        if include_comments:
                             result_builder += "/*"
                             result_builder += token.value.replace("/*", "/ *").replace("*/", "* /")
                             result_builder += "*/"
@@ -965,14 +974,12 @@ class JsonhReader:
         # Optional comma
         self._read_one(',')
 
-    def _read_property_name(self, string: str | None = None) -> Iterator[JsonhResult[JsonhToken, str]]:
+    def _read_property_name(self) -> Iterator[JsonhResult[JsonhToken, str]]:
         # String
-        if string == None:
-            string_token: JsonhResult[JsonhToken, str] = self._read_string()
-            if string_token.is_error:
-                yield string_token
-                return
-            string = string_token.value().value
+        string_token: JsonhResult[JsonhToken, str] = self._read_string()
+        if string_token.is_error:
+            yield string_token
+            return
         
         # Comments & whitespace
         for token in self._read_comments_and_whitespace():
@@ -987,7 +994,7 @@ class JsonhReader:
             return
 
         # End of property name
-        yield JsonhResult.from_value(JsonhToken(JsonTokenType.PROPERTY_NAME, string))
+        yield JsonhResult.from_value(JsonhToken(JsonTokenType.PROPERTY_NAME, string_token.value().value))
 
     def _read_array(self) -> Iterator[JsonhResult[JsonhToken, str]]:
         # Opening bracket
@@ -1072,7 +1079,7 @@ class JsonhReader:
             return self._read_quoteless_string("", is_verbatim)
 
         # Count multiple quotes
-        start_quote_counter = 1
+        start_quote_counter: int = 1
         while self._read_one(start_quote):
             start_quote_counter += 1
 
