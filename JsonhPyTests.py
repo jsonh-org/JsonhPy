@@ -1,5 +1,6 @@
 import math
 import unittest
+from typing import cast
 from src.JsonhPy.JsonhPy import JsonhReader, JsonhReaderOptions, JsonhVersion, JsonhResult, JsonhToken, JsonTokenType, JsonhNumberParser
 
 class JsonhPyTests(unittest.TestCase):
@@ -73,7 +74,7 @@ class JsonhPyTests(unittest.TestCase):
         jsonh: str = """
 "\\U0001F47D and \\uD83D\\uDC7D"
 """
-        element: str = JsonhReader.parse_element_from_string(jsonh).value()
+        element: str = cast(str, JsonhReader.parse_element_from_string(jsonh).value())
 
         self.assertEqual(element, "👽 and 👽")
 
@@ -81,7 +82,7 @@ class JsonhPyTests(unittest.TestCase):
         jsonh: str = """
 \\U0001F47D and \\uD83D\\uDC7D
 """
-        element: str = JsonhReader.parse_element_from_string(jsonh).value()
+        element: str = cast(str, JsonhReader.parse_element_from_string(jsonh).value())
 
         self.assertEqual(element, "👽 and 👽")
 
@@ -91,7 +92,7 @@ class JsonhPyTests(unittest.TestCase):
   Hello! Here's a quote: ". Now a double quote: "". And a triple quote! """. Escape: \\\\\\U0001F47D.
  """"
 '''
-        element: str = JsonhReader.parse_element_from_string(jsonh).value()
+        element: str = cast(str, JsonhReader.parse_element_from_string(jsonh).value())
 
         self.assertEqual(element, " Hello! Here's a quote: \". Now a double quote: \"\". And a triple quote! \"\"\". Escape: \\👽.")
 
@@ -103,7 +104,7 @@ class JsonhPyTests(unittest.TestCase):
     4 5, 6
 ]
 '''
-        element: list[object] = JsonhReader.parse_element_from_string(jsonh).value()
+        element: list[object] = cast(list[object], JsonhReader.parse_element_from_string(jsonh).value())
 
         self.assertEqual(len(element), 5)
         self.assertEqual(element[0], 1)
@@ -120,7 +121,7 @@ class JsonhPyTests(unittest.TestCase):
 a: b
 c : d
 """
-        element: dict[str, str] = JsonhReader.parse_element_from_string(jsonh).value()
+        element: dict[str, str] = cast(dict[str, str], JsonhReader.parse_element_from_string(jsonh).value())
 
         self.assertEqual(len(element), 2)
         self.assertEqual(element["a"], "b")
@@ -134,7 +135,7 @@ c : d
         3 /* block comment */, 4
 ]
 """
-        element: list[int] = JsonhReader.parse_element_from_string(jsonh).value()
+        element: list[int] = cast(list[int], JsonhReader.parse_element_from_string(jsonh).value())
 
         self.assertEqual(len(element), 4)
         self.assertEqual(element[0], 1)
@@ -150,16 +151,16 @@ c : d
     @e\\\\: f\\\\
 }
 """
-        element: dict[str, str] = JsonhReader.parse_element_from_string(jsonh).value()
+        element: dict[str, str] = cast(dict[str, str], JsonhReader.parse_element_from_string(jsonh).value())
 
         self.assertEqual(len(element), 3)
         self.assertEqual(element["a\\"], "b\\")
         self.assertEqual(element["c\\\\"], "d\\\\")
         self.assertEqual(element["e\\\\"], "f\\")
 
-        element2: dict[str, str] = JsonhReader.parse_element_from_string(jsonh, JsonhReaderOptions(
+        element2: dict[str, str] = cast(dict[str, str], JsonhReader.parse_element_from_string(jsonh, JsonhReaderOptions(
             version = JsonhVersion.V1,
-        )).value()
+        )).value())
         self.assertEqual(len(element2), 3)
         self.assertEqual(element2["a\\"], "b\\")
         self.assertEqual(element2["@c\\"], "@d\\")
@@ -168,17 +169,17 @@ c : d
         jsonh2: str = """
 @"a\\\\": @'''b\\\\'''
 """
-        element3: dict[str, str] = JsonhReader.parse_element_from_string(jsonh2).value()
+        element3: dict[str, str] = cast(dict[str, str], JsonhReader.parse_element_from_string(jsonh2).value())
 
         self.assertEqual(len(element3), 1)
         self.assertEqual(element3["a\\\\"], "b\\\\")
 
-    def test_CommentTest(self):
+    def test_ParseSingleElementTest(self):
         jsonh: str = """
 1
 2
 """
-        element: int = JsonhReader.parse_element_from_string(jsonh).value()
+        element: int = cast(int, JsonhReader.parse_element_from_string(jsonh).value())
 
         self.assertEqual(element, 1)
 
@@ -273,7 +274,7 @@ c : d
         jsonh: str = """
 [nulla, null b, null, @null]
 """
-        element: list[str | None] = JsonhReader.parse_element_from_string(jsonh).value()
+        element: list[str | None] = cast(list[str | None], JsonhReader.parse_element_from_string(jsonh).value())
 
         self.assertEqual(len(element), 4)
         self.assertEqual(element[0], "nulla")
@@ -302,7 +303,7 @@ a: {
     a b  , 
 ]
 """
-        element: list[str] = JsonhReader.parse_element_from_string(jsonh).value()
+        element: list[str] = cast(list[str], JsonhReader.parse_element_from_string(jsonh).value())
 
         self.assertEqual(len(element), 1)
         self.assertEqual(element[0], "a b")
@@ -313,7 +314,7 @@ a: {
     a b: c d
 }
 """
-        element: dict[str, str] = JsonhReader.parse_element_from_string(jsonh).value()
+        element: dict[str, str] = cast(dict[str, str], JsonhReader.parse_element_from_string(jsonh).value())
 
         self.assertEqual(len(element), 1)
         self.assertEqual(element["a b"], "c d")
@@ -324,7 +325,7 @@ a: \\"5
 b: \\\\z
 c: 5 \\\\
 """
-        element: dict[str, str] = JsonhReader.parse_element_from_string(jsonh).value()
+        element: dict[str, str] = cast(dict[str, str], JsonhReader.parse_element_from_string(jsonh).value())
 
         self.assertEqual(len(element), 3)
         self.assertEqual(element["a"], "\"5")
@@ -336,7 +337,7 @@ c: 5 \\\\
 """
   hello world  """
 '''
-        element: str = JsonhReader.parse_element_from_string(jsonh).value()
+        element: str = cast(str, JsonhReader.parse_element_from_string(jsonh).value())
 
         self.assertEqual(element, "\n  hello world  ")
 
@@ -345,7 +346,7 @@ c: 5 \\\\
 """  hello world
   """
 '''
-        element: str = JsonhReader.parse_element_from_string(jsonh).value()
+        element: str = cast(str, JsonhReader.parse_element_from_string(jsonh).value())
 
         self.assertEqual(element, "  hello world\n  ")
 
@@ -353,7 +354,7 @@ c: 5 \\\\
         jsonh: str = """
 \\nZ\\ \\r
 """
-        element: str = JsonhReader.parse_element_from_string(jsonh).value()
+        element: str = cast(str, JsonhReader.parse_element_from_string(jsonh).value())
 
         self.assertEqual(element, "Z")
 
@@ -374,7 +375,7 @@ c: 5 \\\\
         jsonh: str = """
 100__000
 """
-        element: int = JsonhReader.parse_element_from_string(jsonh).value()
+        element: int = cast(int, JsonhReader.parse_element_from_string(jsonh).value())
 
         self.assertEqual(element, 100_000)
 
@@ -382,7 +383,7 @@ c: 5 \\\\
         jsonh: str = """
 0b_100
 """
-        element: int = JsonhReader.parse_element_from_string(jsonh).value()
+        element: int = cast(int, JsonhReader.parse_element_from_string(jsonh).value())
 
         self.assertEqual(element, 0b_100)
 
@@ -390,7 +391,7 @@ c: 5 \\\\
         jsonh: str = """
 -0x5
 """
-        element: int = JsonhReader.parse_element_from_string(jsonh).value()
+        element: int = cast(int, JsonhReader.parse_element_from_string(jsonh).value())
 
         self.assertEqual(element, -0x5)
 
@@ -415,7 +416,7 @@ c: 5 \\\\
   a: 3,
 }
 """
-        element: dict[str, int] = JsonhReader.parse_element_from_string(jsonh).value()
+        element: dict[str, int] = cast(dict[str, int], JsonhReader.parse_element_from_string(jsonh).value())
 
         self.assertDictEqual(element, {
             "a": 1,
@@ -427,7 +428,7 @@ c: 5 \\\\
         jsonh: str = """
 0e
 """
-        element: str = JsonhReader.parse_element_from_string(jsonh).value()
+        element: str = cast(str, JsonhReader.parse_element_from_string(jsonh).value())
 
         self.assertIsInstance(element, str)
         self.assertEqual(element, "0e")
@@ -436,21 +437,21 @@ c: 5 \\\\
         jsonh: str = """
 [0e4, 0xe, 0xEe+2]
 """
-        element: list[int] = JsonhReader.parse_element_from_string(jsonh).value()
+        element: list[int] = cast(list[int], JsonhReader.parse_element_from_string(jsonh).value())
 
         self.assertListEqual(element, [0e4, 0xe, 1400])
 
         jsonh2: str = """
 [e+2, 0xe+2, 0oe+2, 0be+2]
 """
-        element2: list[str] = JsonhReader.parse_element_from_string(jsonh2).value()
+        element2: list[str] = cast(list[str], JsonhReader.parse_element_from_string(jsonh2).value())
 
         self.assertListEqual(element2, ["e+2", "0xe+2", "0oe+2", "0be+2"])
 
         jsonh3: str = """
 [0x0e+, 0b0e+_1]
 """
-        element3: list[str] = JsonhReader.parse_element_from_string(jsonh3).value()
+        element3: list[str] = cast(list[str], JsonhReader.parse_element_from_string(jsonh3).value())
 
         self.assertListEqual(element3, ["0x0e+", "0b0e+_1"])
 
@@ -466,19 +467,19 @@ a /
 a: b
 """
 
-        self.assertDictEqual(JsonhReader.parse_element_from_string(jsonh).value(), { "a": "b" })
+        self.assertDictEqual(cast(dict[str, object], JsonhReader.parse_element_from_string(jsonh).value()), { "a": "b" })
 
         jsonh2: str = """
 0: b
 """
 
-        self.assertDictEqual(JsonhReader.parse_element_from_string(jsonh2).value(), { "0": "b" })
+        self.assertDictEqual(cast(dict[str, object], JsonhReader.parse_element_from_string(jsonh2).value()), { "0": "b" })
 
         jsonh3: str = """
 true: b
 """
 
-        self.assertDictEqual(JsonhReader.parse_element_from_string(jsonh3).value(), { "true": "b" })
+        self.assertDictEqual(cast(dict[str, object], JsonhReader.parse_element_from_string(jsonh3).value()), { "true": "b" })
 
     def test_FractionLeadingZeroesTest(self):
         jsonh: str = """
@@ -495,7 +496,7 @@ true: b
     999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999
 ]
 """
-        element: list[float] = JsonhReader.parse_element_from_string(jsonh).value()
+        element: list[float] = cast(list[float], JsonhReader.parse_element_from_string(jsonh).value())
 
         self.assertEqual(len(element), 3)
         self.assertEqual(element[0], 3.5)
