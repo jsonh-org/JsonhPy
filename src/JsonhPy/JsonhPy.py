@@ -1,6 +1,6 @@
 import math
 from enum import Enum
-from typing import Iterator, Iterable
+from typing import Iterator, Iterable, cast
 import json
 
 class JsonhResult[T, E]:
@@ -14,22 +14,22 @@ class JsonhResult[T, E]:
         self.error_or_none = error_or_none
 
     @staticmethod
-    def from_value[T, E](value: T = None) -> "JsonhResult[T, E]":
-        return JsonhResult(False, value, None)
+    def from_value[_T, _E](value: _T = None) -> "JsonhResult[_T, _E]": # type: ignore
+        return JsonhResult[_T, _E](False, value, None)
 
     @staticmethod
-    def from_error[T, E](error: E = None) -> "JsonhResult[T, E]":
-        return JsonhResult(True, None, error)
+    def from_error[_T, _E](error: _E = None) -> "JsonhResult[_T, _E]": # type: ignore
+        return JsonhResult[_T, _E](True, None, error)
 
     def value(self) -> T:
         if self.is_error:
             raise RuntimeError(f"Result was error: {self.error_or_none}")
-        return self.value_or_none
+        return self.value_or_none # type: ignore
 
     def error(self) -> E:
         if not self.is_error:
             raise RuntimeError(f"Result was value: {self.value_or_none}")
-        return self.error_or_none
+        return self.error_or_none # type: ignore
 
     def __repr__(self) -> str:
         if self.is_error:
@@ -188,7 +188,7 @@ class JsonhNumberParser:
 
         # Apply sign
         if sign != 1:
-            number.value_or_none *= sign
+            number.value_or_none *= sign # type: ignore
         return number
 
     @staticmethod
@@ -320,7 +320,7 @@ class JsonhReaderOptions:
     """
     Options for a JsonhReader.
     """
-    version: JsonhVersion.LATEST
+    version: JsonhVersion = JsonhVersion.LATEST
     """
     Specifies the major version of the JSONH specification to use.
     """
@@ -472,12 +472,12 @@ class JsonhReader:
                 return True
             # Array item
             if current_property_name == None:
-                current_array: list[object] = current_elements[-1]
+                current_array: list[object] = cast(list[object], current_elements[-1])
                 current_array.append(element)
                 return False
             # Object property
             else:
-                current_object: dict[str, object] = current_elements[-1]
+                current_object: dict[str, object] = cast(dict[str, object], current_elements[-1])
                 current_object[current_property_name] = element
                 current_property_name = None
                 return False
@@ -501,40 +501,40 @@ class JsonhReader:
                 match token_result.value().json_type:
                     # Null
                     case JsonTokenType.NULL:
-                        element: None = None
-                        if submit_element(element):
-                            return JsonhResult.from_value(element)
+                        element_null: None = None
+                        if submit_element(element_null):
+                            return JsonhResult.from_value(element_null)
                     # True
                     case JsonTokenType.TRUE:
-                        element: bool = True
-                        if submit_element(element):
-                            return JsonhResult.from_value(element)
+                        element_true: bool = True
+                        if submit_element(element_true):
+                            return JsonhResult.from_value(element_true)
                     # False
                     case JsonTokenType.FALSE:
-                        element: bool = False
-                        if submit_element(element):
-                            return JsonhResult.from_value(element)
+                        element_false: bool = False
+                        if submit_element(element_false):
+                            return JsonhResult.from_value(element_false)
                     # String
                     case JsonTokenType.STRING:
-                        element: bool = token_result.value().value
-                        if submit_element(element):
-                            return JsonhResult.from_value(element)
+                        element_string: str = token_result.value().value
+                        if submit_element(element_string):
+                            return JsonhResult.from_value(element_string)
                     # Number
                     case JsonTokenType.NUMBER:
                         result: JsonhResult[float, str] = JsonhNumberParser.parse(token_result.value().value)
                         if result.is_error:
                             return JsonhResult.from_error(result.error())
-                        element: float = result.value()
-                        if submit_element(element):
-                            return JsonhResult.from_value(element)
+                        element_number: float = result.value()
+                        if submit_element(element_number):
+                            return JsonhResult.from_value(element_number)
                     # Start Object
                     case JsonTokenType.START_OBJECT:
-                        element: dict[str, object] = {}
-                        start_element(element)
+                        element_object: dict[str, object] = {}
+                        start_element(element_object)
                     # Start Array
                     case JsonTokenType.START_ARRAY:
-                        element: list[object] = []
-                        start_element(element)
+                        element_array: list[object] = []
+                        start_element(element_array)
                     # End Object/Array
                     case JsonTokenType.END_OBJECT | JsonTokenType.END_ARRAY:
                         # Nested element
@@ -1094,24 +1094,24 @@ class JsonhReader:
         string_builder: str = ""
 
         while True:
-            next: str | None = self._read()
-            if next == None:
+            next2: str | None = self._read()
+            if next2 == None:
                 return JsonhResult.from_error("Expected end of string, got end of input")
 
             # Partial end quote was actually part of string
-            if next != start_quote:
+            if next2 != start_quote:
                 string_builder += start_quote * end_quote_counter
                 end_quote_counter = 0
 
             # End quote
-            if next == start_quote:
+            if next2 == start_quote:
                 end_quote_counter += 1
                 if end_quote_counter == start_quote_counter:
                     break
             # Escape sequence
-            elif next == '\\':
+            elif next2 == '\\':
                 if is_verbatim:
-                    string_builder += next
+                    string_builder += next2
                 else:
                     escape_sequence_result: JsonhResult[str, str] = self._read_escape_sequence()
                     if escape_sequence_result.is_error:
@@ -1119,7 +1119,7 @@ class JsonhReader:
                     string_builder += escape_sequence_result.value()
             # Literal character
             else:
-                string_builder += next
+                string_builder += next2
 
         # Condition: skip remaining steps unless started with multiple quotes
         if start_quote_counter > 1:
@@ -1128,19 +1128,19 @@ class JsonhReader:
             leading_whitespace_newline_counter: int = 0
             index: int = 0
             while index < len(string_builder):
-                next: str = string_builder[index]
+                next3: str = string_builder[index]
 
                 # Newline
-                if next in self._NEWLINE_CHARS:
+                if next3 in self._NEWLINE_CHARS:
                     # Join CR LF
-                    if next == '\r' and index + 1 < len(string_builder) and string_builder[index + 1] == '\n':
+                    if next3 == '\r' and index + 1 < len(string_builder) and string_builder[index + 1] == '\n':
                         index += 1
                     
                     has_leading_whitespace_newline = True
                     leading_whitespace_newline_counter = index + 1
                     break
                 # Non-whitespace
-                elif next not in self._WHITESPACE_CHARS:
+                elif next3 not in self._WHITESPACE_CHARS:
                     break
 
                 index += 1
@@ -1153,19 +1153,19 @@ class JsonhReader:
                 trailing_whitespace_counter: int = 0
                 index: int = 0
                 while index < len(string_builder):
-                    next: str = string_builder[index]
+                    next4: str = string_builder[index]
 
                     # Newline
-                    if next in self._NEWLINE_CHARS:
+                    if next4 in self._NEWLINE_CHARS:
                         has_trailing_newline_whitespace = True
                         last_newline_index = index
                         trailing_whitespace_counter = 0
 
                         # Join CR LF
-                        if next == '\r' and index + 1 < len(string_builder) and string_builder[index + 1] == '\n':
+                        if next4 == '\r' and index + 1 < len(string_builder) and string_builder[index + 1] == '\n':
                             index += 1
                     # Whitespace
-                    elif next in self._WHITESPACE_CHARS:
+                    elif next4 in self._WHITESPACE_CHARS:
                         trailing_whitespace_counter += 1
                     # Non-whitespace
                     else:
@@ -1189,14 +1189,14 @@ class JsonhReader:
                         line_leading_whitespace_counter: int = 0
                         index: int = 0
                         while index < len(string_builder):
-                            next: str = string_builder[index]
+                            next5: str = string_builder[index]
 
                             # Newline
-                            if next in self._NEWLINE_CHARS:
+                            if next5 in self._NEWLINE_CHARS:
                                 is_line_leading_whitespace = True
                                 line_leading_whitespace_counter = 0
                             # Whitespace
-                            elif next in self._WHITESPACE_CHARS:
+                            elif next5 in self._WHITESPACE_CHARS:
                                 if is_line_leading_whitespace:
                                     # Increment line-leading whitespace
                                     line_leading_whitespace_counter += 1
@@ -1240,7 +1240,7 @@ class JsonhReader:
                 if is_verbatim:
                     string_builder += next
                 else:
-                    escape_sequence_result: JsonhResult[str] = self._read_escape_sequence()
+                    escape_sequence_result: JsonhResult[str, str] = self._read_escape_sequence()
                     if escape_sequence_result.is_error:
                         return JsonhResult.from_error(escape_sequence_result.error())
                     string_builder += escape_sequence_result.value()
@@ -1346,9 +1346,9 @@ class JsonhReader:
                         has_leading_zero = False
 
         # Read main number
-        main_result: JsonhResult[None, None] = self._read_number_no_exponent(number_builder, base_digits, has_base_specifier, has_leading_zero)
+        main_result: JsonhResult[None, str] = self._read_number_no_exponent(number_builder, base_digits, has_base_specifier, has_leading_zero)
         if main_result.is_error:
-            number: JsonhResult[None, str] = JsonhResult.from_error(main_result.error())
+            number: JsonhResult[JsonhToken, str] = JsonhResult.from_error(main_result.error())
             partial_chars_read: str = number_builder.ref
             return number, partial_chars_read
 
@@ -1361,16 +1361,16 @@ class JsonhReader:
 
                 # Missing digit between base specifier and exponent (e.g. `0xe+`)
                 if has_base_specifier and len(number_builder.ref) == 4:
-                    number: JsonhResult[None, str] = JsonhResult.from_error("Missing digit between base specifier and exponent")
+                    number2: JsonhResult[JsonhToken, str] = JsonhResult.from_error("Missing digit between base specifier and exponent")
                     partial_chars_read: str = number_builder.ref
-                    return number, partial_chars_read
+                    return number2, partial_chars_read
 
                 # Read exponent number
-                exponent_result: JsonhResult[None, None] = self._read_number_no_exponent(number_builder, base_digits)
+                exponent_result: JsonhResult[None, str] = self._read_number_no_exponent(number_builder, base_digits)
                 if exponent_result.is_error:
-                    number: JsonhResult[None, str] = JsonhResult.from_error(exponent_result.error())
+                    number3: JsonhResult[JsonhToken, str] = JsonhResult.from_error(exponent_result.error())
                     partial_chars_read: str = number_builder.ref
-                    return number, partial_chars_read
+                    return number3, partial_chars_read
         # Exponent
         else:
             exponent_char: str | None = self._read_any('e', 'E')
@@ -1383,20 +1383,20 @@ class JsonhReader:
                     number_builder.ref += exponent_sign
 
                 # Read exponent number
-                exponent_result: JsonhResult[None, None] = self._read_number_no_exponent(number_builder, base_digits)
-                if exponent_result.is_error:
-                    number: JsonhResult[None, str] = JsonhResult.from_error(exponent_result.error())
+                exponent_result2: JsonhResult[None, str] = self._read_number_no_exponent(number_builder, base_digits)
+                if exponent_result2.is_error:
+                    number4: JsonhResult[JsonhToken, str] = JsonhResult.from_error(exponent_result2.error())
                     partial_chars_read: str = number_builder.ref
-                    return number, partial_chars_read
+                    return number4, partial_chars_read
 
         # End of number
-        number: JsonhResult[JsonhToken, str] = JsonhResult.from_value(JsonhToken(JsonTokenType.NUMBER, number_builder.ref))
+        number5: JsonhResult[JsonhToken, str] = JsonhResult.from_value(JsonhToken(JsonTokenType.NUMBER, number_builder.ref))
         partial_chars_read: str = ""
-        return number, partial_chars_read
+        return number5, partial_chars_read
 
-    def _read_number_no_exponent(self, number_builder: JsonhRef[str], base_digits: str, has_base_specifier: bool = False, has_leading_zero: bool = False) -> JsonhResult[None, None]:
+    def _read_number_no_exponent(self, number_builder: JsonhRef[str], base_digits: str, has_base_specifier: bool = False, has_leading_zero: bool = False) -> JsonhResult[None, str]:
         # Leading underscore
-        if (not has_base_specifier) and not (has_leading_zero) and self._peek() == '_':
+        if (not has_base_specifier) and (not has_leading_zero) and self._peek() == '_':
             return JsonhResult.from_error("Leading `_` in number")
 
         is_fraction: bool = False
