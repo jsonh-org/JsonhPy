@@ -395,7 +395,7 @@ class JsonhReader:
     """
     The string to read characters from.
     """
-    index: int
+    string_index: int
     """
     The index in the string.
     """
@@ -444,7 +444,7 @@ class JsonhReader:
         Constructs a reader that reads JSONH from a string.
         """
         self.string = string
-        self.index = 0
+        self.string_index = 0
         self.options = options
         self.char_counter = 0
         self.depth = 0
@@ -1715,16 +1715,16 @@ class JsonhReader:
         return code_point >= 0xDC00 and code_point <= 0xDFFF
 
     def _peek(self) -> str | None:
-        if self.index >= len(self.string):
+        if self.string_index >= len(self.string):
             return None
-        next: str = self.string[self.index]
+        next: str = self.string[self.string_index]
         return next
 
     def _read(self) -> str | None:
-        if self.index >= len(self.string):
+        if self.string_index >= len(self.string):
             return None
-        next: str = self.string[self.index]
-        self.index += 1
+        next: str = self.string[self.string_index]
+        self.string_index += 1
         self.char_counter += 1
         return next
 
