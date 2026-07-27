@@ -1668,7 +1668,7 @@ class JsonhReader:
             case 'U':
                 return self._read_hex_escape_sequence(8, high_surrogate)
             # Escaped newline
-            case self._NEWLINE_CHARS:
+            case _ if escape_char in self._NEWLINE_CHARS:
                 # Join CR LF
                 if escape_char == 'r':
                     self._read_one('\n')
